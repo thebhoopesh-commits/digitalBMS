@@ -1,0 +1,31 @@
+{
+  "name": "corporate-office-3d",
+  "version": "1.0.0",
+  "description": "High-performance immersive 3D corporate office web application built with Three.js and TypeScript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "test:orbit": "node tests/isolated_orbit_sync_test.cjs",
+    "test:stress": "node tests/stress_test_m2_challenger2.cjs",
+    "test:m2": "node tests/m2_navigation_collision_test.cjs",
+    "test:m3": "node tests/m3_interaction_audio_test.cjs"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.41.0",
+    "@types/node": "^20.11.0",
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

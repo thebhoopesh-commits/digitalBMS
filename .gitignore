@@ -1,0 +1,22 @@
+# Unwanted files requested by user
+test.py
+*.pptx
+~$*.pptx
+executionplans.md
+futureplans.md
+test_report*.json
+scratch/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+test_junit.xml
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Env
+.env

@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Aura Corp 3D — Virtual Office Headquarters</title>
+  <meta name="description" content="Immersive 3D Corporate Office with First-Person & Orbit navigation, interactive screens, and spatial audio built with Three.js" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #05070c;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #f8fafc;
+    }
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #webgl-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      overflow: hidden;
+      touch-action: none;
+    }
+    #webgl-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    #hud-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+    }
+    .hud-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      pointer-events: auto;
+    }
+    .brand-logo-icon {
+      font-size: 24px;
+    }
+    .brand-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-name {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #38bdf8;
+    }
+    .brand-tag {
+      font-size: 10px;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+    }
+    .hud-pill {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .status-pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+    .hud-center-status {
+      display: flex;
+      gap: 12px;
+    }
+    .hud-header-right {
+      display: flex;
+      gap: 12px;
+    }
+    .perf-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #38bdf8;
+    }
+    .stat-divider {
+      color: rgba(255, 255, 255, 0.2);
+    }
+    .reticle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .reticle-center-dot {
+      width: 4px;
+      height: 4px;
+      background: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    .reticle-outer-ring {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 1.5px solid rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      opacity: 0.6;
+      transition: all 0.2s ease;
+    }
+    .reticle-hover .reticle-outer-ring {
+      width: 32px;
+      height: 32px;
+      border-color: #38bdf8;
+      opacity: 1;
+    }
+    .interaction-prompt {
+      position: absolute;
+      top: calc(50% + 36px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .prompt-key-badge {
+      background: #38bdf8;
+      color: #0f172a;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .minimap-container {
+      position: absolute;
+      top: 80px;
+      right: 24px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 12px;
+      pointer-events: auto;
+      width: 244px;
+    }
+    .minimap-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .minimap-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #94a3b8;
+    }
+    .radar-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #38bdf8;
+    }
+    .minimap-canvas-wrapper {
+      width: 220px;
+      height: 143px;
+      background: #090d16;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+    .quick-teleport-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .quick-teleport-grid .teleport-btn:nth-child(3) {
+      grid-column: span 2;
+    }
+    .teleport-btn {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .teleport-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+    .tp-num {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+    }
+    .hud-footer {
+      padding: 16px 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .hud-controls-toolbar {
+      display: flex;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 6px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      pointer-events: auto;
+    }
+    .toolbar-btn {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #f1f5f9;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .toolbar-btn:hover {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: #38bdf8;
+    }
+    .icon-only {
+      padding: 8px 12px;
+    }
+    .welcome-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 7, 12, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      transition: opacity 0.4s ease;
+    }
+    .welcome-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 520px;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .welcome-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    .welcome-card h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #f8fafc;
+      margin-bottom: 8px;
+    }
+    .welcome-subtitle {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-bottom: 24px;
+    }
+    .features-preview-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+    .preview-badge {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+    .start-app-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      border: none;
+      color: #ffffff;
+      padding: 14px 24px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+      transition: all 0.2s ease;
+    }
+    .start-app-btn:hover {
+      background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.6);
+    }
+    .start-hint {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 12px;
+    }
+    .settings-drawer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      z-index: 50;
+      padding: 24px;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+      gap: 20px;
+    }
+    .chat-drawer {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 340px;
+      height: calc(100% - 32px);
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      z-index: 50;
+      padding: 20px;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      gap: 16px;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 8px;
+    }
+    .chat-messages::-webkit-scrollbar {
+      width: 4px;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    .chat-msg {
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 85%;
+      word-wrap: break-word;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(8px);
+    }
+    .user-msg {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.8), rgba(3, 105, 161, 0.8));
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-bottom-right-radius: 4px;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    }
+    .assistant-msg {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-bottom-left-radius: 4px;
+      color: #e2e8f0;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    }
+    .chat-form {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .chat-input:focus {
+      outline: none;
+    }
+    .chat-submit-btn {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 10px;
+      width: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: white;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+    }
+    .chat-submit-btn:hover {
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.6);
+    }
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .setting-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .setting-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #94a3b8;
+    }
+    .preset-button-row {
+      display: flex;
+      gap: 8px;
+    }
+    .preset-btn {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .preset-btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 7, 12, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+    .modal-dialog {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 480px;
+      width: 90%;
+    }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- WebGL Canvas Viewport -->
+    <div id="webgl-container"></div>
+
+    <!-- HUD Overlay Layer -->
+    <div id="hud-layer">
+      <!-- Top Navigation & Status Bar -->
+      <header class="hud-header">
+        <div class="hud-brand">
+          <div class="brand-logo-icon">🏢</div>
+          <div class="brand-info">
+            <span class="brand-name">AURA HQ</span>
+            <span class="brand-tag">3D WORKSPACE</span>
+          </div>
+        </div>
+
+        <div class="hud-center-status">
+          <div id="zone-banner" class="hud-pill zone-pill">
+            <span class="status-pulse-dot"></span>
+            <span id="zone-text">Welcome Reception</span>
+          </div>
+          <div id="mode-badge" class="hud-pill mode-pill mode-fps">
+            <span class="mode-icon">👁️</span>
+            <span id="mode-text">FPS WALKTHROUGH</span>
+          </div>
+        </div>
+
+        <div class="hud-header-right">
+          <div id="perf-stats" class="hud-pill perf-pill" title="Performance Telemetry">
+            <span id="fps-stat">60 FPS</span>
+            <span class="stat-divider">|</span>
+            <span id="draw-stat">32 DC</span>
+            <span class="stat-divider">|</span>
+            <span id="poly-stat">42k Tri</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Center Crosshair / Reticle for FPS Mode -->
+      <div id="reticle" class="reticle reticle-idle">
+        <div class="reticle-center-dot"></div>
+        <div class="reticle-outer-ring"></div>
+      </div>
+
+      <!-- Contextual Interaction Prompt -->
+      <div id="interaction-prompt" class="interaction-prompt hidden">
+        <span class="prompt-key-badge">[E]</span>
+        <span id="prompt-action-text">Interact</span>
+      </div>
+
+      <!-- Real-Time Minimap & Teleport Dock -->
+      <aside id="minimap-container" class="minimap-container">
+        <div class="minimap-header">
+          <div class="minimap-title-row">
+            <span class="radar-dot"></span>
+            <span class="minimap-label">SPATIAL RADAR</span>
+          </div>
+          <button id="btn-toggle-minimap" class="icon-btn" title="Toggle Minimap">➖</button>
+        </div>
+        <div class="minimap-canvas-wrapper">
+          <canvas id="minimap-canvas" width="220" height="143"></canvas>
+        </div>
+        <div class="quick-teleport-grid">
+          <button class="teleport-btn" data-zone="lobby" title="Jump to Lobby">
+            <span class="tp-num">1</span> Lobby
+          </button>
+          <button class="teleport-btn" data-zone="open_office" title="Jump to Open Office">
+            <span class="tp-num">2</span> Office
+          </button>
+          <button class="teleport-btn" data-zone="conference_room" title="Jump to Conference Room">
+            <span class="tp-num">3</span> Conf. Room
+          </button>
+        </div>
+      </aside>
+
+      <!-- Bottom Action Bar -->
+      <footer class="hud-footer">
+        <div class="hud-controls-toolbar">
+          <button id="btn-mode-toggle" class="toolbar-btn" title="Switch View Mode [V]">
+            <span class="btn-icon">🔄</span>
+            <span class="btn-text">Orbit View [V]</span>
+          </button>
+          <button id="btn-settings" class="toolbar-btn" title="Open Settings Drawer [O]">
+            <span class="btn-icon">⚙️</span>
+            <span class="btn-text">Settings</span>
+          </button>
+          <button id="btn-chat" class="toolbar-btn" title="AI Occupant Feedback [C]">
+            <span class="btn-icon">💬</span>
+            <span class="btn-text">Feedback AI [C]</span>
+          </button>
+          <button id="btn-help" class="toolbar-btn" title="Controls & Shortcuts Guide [H]">
+            <span class="btn-icon">❓</span>
+            <span class="btn-text">Guide [H]</span>
+          </button>
+          <button id="btn-audio-mute" class="toolbar-btn icon-only" title="Toggle Sound [M]">
+            <span class="btn-icon" id="audio-icon">🔊</span>
+          </button>
+        </div>
+      </footer>
+
+      <!-- Help / Controls Modal -->
+      <div id="help-modal" class="modal-backdrop hidden">
+        <div class="modal-dialog">
+          <div class="drawer-header" style="margin-bottom:16px">
+            <h3>Controls &amp; Navigation</h3>
+            <button id="btn-close-help" class="icon-btn" title="Close Help">✕</button>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <tbody>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">W A S D</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Move around</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">Mouse</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Look around (FPS mode)</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">Shift</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Sprint</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">V</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Toggle FPS / Orbit view</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">1 – 4</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Quick teleport to rooms</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">E</span> / <span class="prompt-key-badge">Click</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Interact with objects</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">O</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Open settings</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+                <td style="padding:6px 8px"><span class="prompt-key-badge">H</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Toggle this help</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 8px"><span class="prompt-key-badge">M</span></td>
+                <td style="padding:6px 8px;color:#cbd5e1">Mute / unmute audio</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top:18px;text-align:center">
+            <button id="btn-ack-help" class="toolbar-btn" style="display:inline-flex">
+              <span class="btn-text">Got it!</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slide-Out Settings Drawer -->
+      <div id="settings-drawer" class="settings-drawer hidden">
+        <div class="drawer-header">
+          <h3>Workspace Settings</h3>
+          <button id="btn-close-settings" class="icon-btn" title="Close Settings">✕</button>
+        </div>
+        <div class="drawer-content">
+          <div class="setting-group">
+            <label class="setting-label">Atmospheric Lighting</label>
+            <div class="preset-button-row">
+              <button class="preset-btn active" data-preset="day">☀️ Day</button>
+              <button class="preset-btn" data-preset="sunset">🌅 Sunset</button>
+              <button class="preset-btn" data-preset="night">🌙 Night</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Drawer -->
+      <div id="chat-drawer" class="chat-drawer hidden">
+        <div class="drawer-header">
+          <h3>Occupant Feedback AI</h3>
+          <button id="btn-close-chat" class="icon-btn" title="Close Chat">✕</button>
+        </div>
+        
+        <div id="chat-messages" class="chat-messages">
+          <div class="chat-msg assistant-msg">
+            Hello! I am the building intelligence system. I can analyze your comfort feedback and automatically adjust HVAC parameters across zones. How can I help you?
+          </div>
+        </div>
+        
+        <form id="chat-form" class="chat-form">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Type a complaint... (e.g. Too cold in lobby)" autocomplete="off">
+          <button type="submit" class="chat-submit-btn">➤</button>
+        </form>
+      </div>
+
+      <!-- Initial Welcome / Click-to-Start Overlay -->
+      <div id="overlay-start" class="welcome-overlay">
+        <div class="welcome-card">
+          <div class="welcome-icon">🏢</div>
+          <h1>AURA CORP HEADQUARTERS</h1>
+          <p class="welcome-subtitle">Immersive 3D Corporate Workspace & Interactive Digital Twin</p>
+          <div class="features-preview-row">
+            <div class="preview-badge">✨ 4 Distinct Zones</div>
+            <div class="preview-badge">🎮 Dual FPS / Orbit Navigation</div>
+            <div class="preview-badge">💻 Interactive Live Screens</div>
+            <div class="preview-badge">🔊 Spatial Audio Synthesizer</div>
+          </div>
+          <button id="btn-start-app" class="start-app-btn">ENTER WORKSPACE</button>
+          <p class="start-hint">Clicking initiates WebGL, Audio Engine & Camera</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Application Bootstrap Entrypoint -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

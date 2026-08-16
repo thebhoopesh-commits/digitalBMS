@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Twin HVAC Optimizer</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            <h1>Digital Twin Optimizer</h1>
+        </div>
+        <div class="status-panel">
+            <div id="sim-status" class="status-indicator stopped">Stopped</div>
+            <div class="time-display">Sim Time: <span id="sim-time">00:00</span></div>
+            <div class="controls">
+                <button id="btn-start" class="btn btn-primary">Start</button>
+                <button id="btn-pause" class="btn btn-secondary">Pause</button>
+                <button id="btn-reset" class="btn btn-danger">Reset</button>
+                <div class="speed-control">
+                    <label for="speed-slider">Speed: <span id="speed-val">1.0x</span></label>
+                    <input type="range" id="speed-slider" min="0.1" max="50" step="0.1" value="1.0">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <section class="panel metrics-panel">
+            <h2>System Performance</h2>
+            <div class="metrics-grid">
+                <div class="metric-card baseline">
+                    <h3>Baseline Power (ASHRAE)</h3>
+                    <div class="value"><span id="m-p-base">0.00</span> kW</div>
+                    <div class="subtext">Cumulative: <span id="m-c-base">0.00</span> kWh</div>
+                </div>
+                <div class="metric-card optimized">
+                    <h3>Optimized Power (RL)</h3>
+                    <div class="value"><span id="m-p-rl">0.00</span> kW</div>
+                    <div class="subtext">Cumulative: <span id="m-c-rl">0.00</span> kWh</div>
+                </div>
+                <div class="metric-card savings">
+                    <h3>Energy Savings</h3>
+                    <div class="value"><span id="m-pct-save">0.0</span>%</div>
+                    <div class="subtext">Saved: $<span id="m-c-save">0.00</span></div>
+                </div>
+                <div class="metric-card weather">
+                    <h3>Outdoor Weather</h3>
+                    <div class="value"><span id="m-w-temp">0.0</span>°C</div>
+                    <div class="subtext">RH: <span id="m-w-rh">0</span>% | Solar: <span id="m-w-solar">0</span> W/m²</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="middle-row">
+            <section class="panel zones-panel">
+                <h2>Thermal Zones (Live)</h2>
+                <div id="zones-container" class="zones-grid">
+                    <!-- Zones injected via JS -->
+                </div>
+            </section>
+
+            <section class="panel nlp-panel">
+                <h2>Occupant Feedback</h2>
+                <div class="chat-container">
+                    <div id="chat-history" class="chat-history">
+                        <div class="chat-system">Submit a complaint to adjust setpoints (e.g. "Lobby is too hot").</div>
+                    </div>
+                    <form id="chat-form" class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Type complaint here..." autocomplete="off">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </main>
+    <script src="/static/app.js"></script>
+</body>
+</html>
