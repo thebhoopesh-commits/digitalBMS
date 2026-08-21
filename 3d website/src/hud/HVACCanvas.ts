@@ -9,11 +9,12 @@ export interface ZoneHVACData {
   co2: number;
   powerDraw: number;
   baselinePower: number;
-  hvacMode: 'COOLING' | 'HEATING' | 'ECO' | 'OFF' | 'AUTO';
+  hvacMode: 'AUTO' | 'COOLING' | 'HEATING' | 'FAN_ONLY' | 'ECO' | 'OFF';
   score: number;
   consumptionHistory: number[];
+  activeAlerts: number;
   isCommandGlass?: boolean;
-  activeAlerts?: number;
+  occupancy: number;
 }
 
 export class HVACCanvas {
@@ -59,12 +60,10 @@ export class HVACCanvas {
     const { ctx } = this;
 
     // Header
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 48px "Segoe UI", sans-serif';
     ctx.fillText('BUILDING COMMAND', 60, 90);
-    ctx.shadowBlur = 0;
 
     // Main Score
     ctx.fillStyle = data.score >= 90 ? '#00e676' : data.score >= 70 ? '#00b4d8' : data.score >= 50 ? '#ffb703' : '#ff3b30';
@@ -91,18 +90,22 @@ export class HVACCanvas {
     // Footer
     ctx.fillStyle = '#00e676';
     ctx.fillText('✓ Eco mode active in Conference Room', 60, 500);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '24px "Segoe UI", sans-serif';
+    ctx.fillText(`Occupants: ${data.occupancy}`, 950, 500);
+    ctx.textAlign = 'left';
   }
 
   private drawStandardZone(data: ZoneHVACData) {
     const { ctx } = this;
 
     // Header
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 36px "Segoe UI", sans-serif';
     ctx.fillText(data.zoneName.toUpperCase(), 50, 80);
-    ctx.shadowBlur = 0;
 
     // Status Pill
     ctx.fillStyle = data.hvacMode === 'COOLING' ? 'rgba(0, 240, 255, 0.2)' : 
@@ -138,6 +141,12 @@ export class HVACCanvas {
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '18px "Segoe UI", sans-serif';
     ctx.fillText(`CO2: ${Math.round(data.co2)} ppm   |   Score: ${Math.round(data.score)}`, 50, 520);
+    
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '24px "Segoe UI", sans-serif';
+    ctx.fillText(`Occupants: ${data.occupancy}`, 950, 520);
+    ctx.textAlign = 'left';
   }
 
   private drawProgressBar(x: number, y: number, label: string, value: string, percent: number) {

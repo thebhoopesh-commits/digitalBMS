@@ -219,24 +219,32 @@ function createBarStoolGeometry(): THREE.BufferGeometry {
  */
 function mergeBufferGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const merged = new THREE.BufferGeometry();
+  
+  // Convert all geometries to non-indexed first so we don't have to merge index arrays
+  const nonIndexedGeometries = geometries.map(g => g.index ? g.toNonIndexed() : g);
+
   let totalPositions = 0;
   let totalNormals = 0;
-  let totalIndices = 0;
+  let totalUVs = 0;
 
-  for (const g of geometries) {
+  for (const g of nonIndexedGeometries) {
     const pos = g.getAttribute('position');
     if (pos) totalPositions += pos.array.length;
     const norm = g.getAttribute('normal');
-    if (norm) totalNormals += norm ? norm.array.length : 0;
-    if (g.index) totalIndices += g.index.array.length;
+    if (norm) totalNormals += norm.array.length;
+    const uv = g.getAttribute('uv');
+    if (uv) totalUVs += uv.array.length;
   }
 
   const positions = new Float32Array(totalPositions);
   const normals = new Float32Array(totalNormals);
+  const uvs = new Float32Array(totalUVs);
+  
   let posOffset = 0;
   let normOffset = 0;
+  let uvOffset = 0;
 
-  for (const g of geometries) {
+  for (const g of nonIndexedGeometries) {
     const pos = g.getAttribute('position');
     if (pos) {
       positions.set(pos.array, posOffset);
@@ -247,6 +255,11 @@ function mergeBufferGeometries(geometries: THREE.BufferGeometry[]): THREE.Buffer
       normals.set(norm.array, normOffset);
       normOffset += norm.array.length;
     }
+    const uv = g.getAttribute('uv');
+    if (uv) {
+      uvs.set(uv.array, uvOffset);
+      uvOffset += uv.array.length;
+    }
   }
 
   merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -254,6 +267,9 @@ function mergeBufferGeometries(geometries: THREE.BufferGeometry[]): THREE.Buffer
     merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   } else {
     merged.computeVertexNormals();
+  }
+  if (totalUVs > 0) {
+    merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   }
 
   return merged;
@@ -987,12 +1003,12 @@ export class OfficeFloorplan {
   private buildZone4Lounge(): void {
     // 5.1 Kitchenette & Coffee Bar Counter
     // East Run Counter
-    const barEast = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.95, 6.2), this.materials.marbleCalacatta);
-    barEast.position.set(17.5, 0.475, 7.5);
+    const barEast = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.95, 5.3), this.materials.marbleCalacatta);
+    barEast.position.set(17.5, 0.475, 7.05);
     barEast.castShadow = true;
     barEast.receiveShadow = true;
     this.group.add(barEast);
-    this.registerObstacle('lounge_bar_east', 'Kitchenette Counter East Run', 'lounge', new THREE.Vector3(16.9, 0, 4.4), new THREE.Vector3(18.1, 0.95, 10.6));
+    this.registerObstacle('lounge_bar_east', 'Kitchenette Counter East Run', 'lounge', new THREE.Vector3(16.9, 0, 4.4), new THREE.Vector3(18.1, 0.95, 9.7));
 
     // Island Return Counter
     const barIsland = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.95, 1.0), this.materials.marbleCalacatta);

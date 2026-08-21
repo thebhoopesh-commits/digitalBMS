@@ -6,6 +6,7 @@ Strict zero-hallucination validation with model_config = ConfigDict(extra="forbi
 from __future__ import annotations
 
 import time
+import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -75,25 +76,39 @@ ZONE_ALIAS_MAP: Dict[str, str] = {
 }
 
 
-class ThermalIntent(str, Enum):
+class ComfortIntent(str, Enum):
     """Primary environmental and thermal discomfort intents."""
     TOO_COLD = "too_cold"
     TOO_WARM = "too_warm"
     TOO_HUMID = "too_humid"
     TOO_DRY = "too_dry"
     STUFFY = "stuffy"
+    DRAFTY = "drafty"
     COMFORTABLE = "comfortable"
+    UNKNOWN = "unknown"
 
 
-class UrgencyLevel(str, Enum):
-    """Urgency priority tiers for occupant feedback resolution."""
+class SeverityLevel(str, Enum):
+    """Severity tiers for occupant feedback."""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+    CRITICAL = "critical"
 
 
-class ZoneConstraint(BaseModel):
-    """Specific environmental constraint targeting a single building zone."""
+class SuspectedCause(str, Enum):
+    """Suspected physical causes of the discomfort."""
+    DRAFT = "draft"
+    SOLAR_GAIN = "solar_gain"
+    HIGH_OCCUPANCY = "high_occupancy"
+    EQUIPMENT_HEAT = "equipment_heat"
+    HVAC_INACTIVE = "hvac_inactive"
+    WEATHER_EXTREME = "weather_extreme"
+    UNSPECIFIED = "unspecified"
+
+
+class ComfortEvent(BaseModel):
+    """Pure semantic extraction of an occupant's comfort feedback."""
     model_config = ConfigDict(
         extra="forbid",
         validate_assignment=True,
@@ -101,29 +116,31 @@ class ZoneConstraint(BaseModel):
         str_strip_whitespace=True,
     )
 
+    event_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique identifier for the event",
+    )
     zone_id: str = Field(
         ...,
-        description="Target zone identifier: 'lobby', 'open_office', 'conference_room', or 'server_room'",
+        description="Target zone identifier",
     )
-    intent: ThermalIntent = Field(
+    intent: ComfortIntent = Field(
         ...,
         description="Primary environmental discomfort intent",
     )
-    temperature_offset_c: float = Field(
-        default=0.0,
-        description="Desired temperature offset in Celsius (+/-)",
+    suspected_cause: Optional[SuspectedCause] = Field(
+        default=SuspectedCause.UNSPECIFIED,
+        description="Optional suspected cause extracted from the query",
     )
-    humidity_offset_pct: float = Field(
-        default=0.0,
-        description="Desired relative humidity offset percentage (+/-)",
+    severity: SeverityLevel = Field(
+        default=SeverityLevel.MEDIUM,
+        description="Severity or urgency priority of the request",
     )
-    target_temp_bounds_c: Optional[Tuple[float, float]] = Field(
-        default=None,
-        description="Hard min/max temperature bounds in Celsius [T_min, T_max]",
-    )
-    urgency: UrgencyLevel = Field(
-        default=UrgencyLevel.MEDIUM,
-        description="Urgency priority of request",
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score of translation (0.0 to 1.0)",
     )
     duration_minutes: int = Field(
         default=60,
@@ -131,11 +148,9 @@ class ZoneConstraint(BaseModel):
         le=1440,
         description="Active constraint duration in minutes before exponential decay",
     )
-    confidence: float = Field(
-        default=1.0,
-        ge=0.0,
-        le=1.0,
-        description="Confidence score of translation (0.0 to 1.0)",
+    source: str = Field(
+        default="LLM",
+        description="Source of this event ('LLM', 'REGEX_FALLBACK', etc.)",
     )
     reasoning: str = Field(
         ...,
@@ -159,49 +174,9 @@ class ZoneConstraint(BaseModel):
             )
         return canonical
 
-    @field_validator("temperature_offset_c")
-    @classmethod
-    def validate_temp_offset(cls, v: float) -> float:
-        if not -5.0 <= v <= 5.0:
-            raise ValueError(
-                f"temperature_offset_c {v}°C exceeds safe bounds [-5.0, +5.0]°C"
-            )
-        return round(float(v), 2)
 
-    @field_validator("humidity_offset_pct")
-    @classmethod
-    def validate_humidity_offset(cls, v: float) -> float:
-        if not -30.0 <= v <= 30.0:
-            raise ValueError(
-                f"humidity_offset_pct {v}% exceeds safe bounds [-30.0, +30.0]%"
-            )
-        return round(float(v), 2)
-
-    @field_validator("target_temp_bounds_c")
-    @classmethod
-    def validate_target_temp_bounds(
-        cls, v: Optional[Tuple[float, float]]
-    ) -> Optional[Tuple[float, float]]:
-        if v is None:
-            return None
-        if len(v) != 2:
-            raise ValueError(
-                f"target_temp_bounds_c must contain exactly 2 floats (T_min, T_max), got {v}"
-            )
-        t_min, t_max = float(v[0]), float(v[1])
-        if t_min > t_max:
-            raise ValueError(
-                f"Lower temperature bound {t_min}°C cannot exceed upper bound {t_max}°C"
-            )
-        if t_min < 15.0 or t_max > 32.0:
-            raise ValueError(
-                f"Temperature bounds [{t_min}, {t_max}]°C out of safety range [15.0, 32.0]°C"
-            )
-        return (round(t_min, 2), round(t_max, 2))
-
-
-class NLPTranslationResult(BaseModel):
-    """Complete structured response produced by the NLP translation engine."""
+class SemanticTranslationResult(BaseModel):
+    """Complete semantic response produced by the NLP translation engine."""
     model_config = ConfigDict(
         extra="forbid",
         validate_assignment=True,
@@ -221,9 +196,9 @@ class NLPTranslationResult(BaseModel):
         default="",
         description="Conversational response generated by the NLP engine",
     )
-    constraints: List[ZoneConstraint] = Field(
+    events: List[ComfortEvent] = Field(
         default_factory=list,
-        description="List of extracted zone constraints",
+        description="List of extracted semantic comfort events",
     )
     timestamp: float = Field(
         default_factory=time.time,
@@ -231,21 +206,35 @@ class NLPTranslationResult(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_applicability_and_constraints(self) -> NLPTranslationResult:
+    def validate_applicability_and_events(self) -> SemanticTranslationResult:
         if not self.is_applicable:
-            # If not applicable, constraints must be empty
-            if self.constraints:
-                self.constraints = []
+            if self.events:
+                self.events = []
         else:
-            # If applicable, there must be at least one constraint
-            if not self.constraints:
+            if not self.events:
                 raise ValueError(
-                    "is_applicable is True but constraints list is empty. "
-                    "At least one ZoneConstraint is required for applicable feedback."
+                    "is_applicable is True but events list is empty. "
+                    "At least one ComfortEvent is required for applicable feedback."
                 )
         return self
 
 
+class BoundedPreference(BaseModel):
+    """Bounded physical preference translated deterministically from a ComfortEvent."""
+    model_config = ConfigDict(extra="forbid")
+    
+    zone_id: str
+    target_temp_offset_c: float
+    target_rh_offset_pct: float
+    base_weight: float
+    plateau_minutes: int
+    half_life_minutes: int
+    created_at: float
+    intent: str
+    severity: str
+    confidence: float
+
+
 def get_translation_json_schema() -> Dict[str, Any]:
-    """Returns the OpenAPI / JSON Schema dictionary for NLPTranslationResult."""
-    return NLPTranslationResult.model_json_schema()
+    """Returns the OpenAPI / JSON Schema dictionary for SemanticTranslationResult."""
+    return SemanticTranslationResult.model_json_schema()

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Aura Corp 3D — Virtual Office Headquarters</title>
+  <title>DIGITAL BMS — Virtual Office Headquarters</title>
   <meta name="description" content="Immersive 3D Corporate Office with First-Person & Orbit navigation, interactive screens, and spatial audio built with Three.js" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -62,17 +62,19 @@
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
+      position: relative;
     }
     .hud-brand {
       display: flex;
       align-items: center;
       gap: 12px;
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
       padding: 8px 16px;
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       pointer-events: auto;
     }
     .brand-logo-icon {
@@ -94,18 +96,122 @@
       letter-spacing: 0.5px;
     }
     .hud-pill {
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
       padding: 8px 16px;
       border-radius: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       font-size: 13px;
       font-weight: 500;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      position: relative;
       pointer-events: auto;
+    }
+    .weather-dropdown-btn {
+      margin-left: 4px;
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .weather-dropdown-panel {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 220px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 16px;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 100;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .weather-dropdown-panel.hidden {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-10px);
+      pointer-events: none;
+    }
+    .tv-dashboard-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 150;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      transition: opacity 0.3s ease;
+    }
+    .tv-dashboard-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .tv-dashboard-panel {
+      width: 340px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transform: scale(1);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tv-dashboard-overlay.hidden .tv-dashboard-panel {
+      transform: scale(0.95);
+    }
+    .tv-dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 12px;
+    }
+    .tv-dashboard-header h3 {
+      font-size: 15px;
+      color: #f8fafc;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    .weather-dropdown-header {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+      margin-bottom: 4px;
+    }
+    .weather-stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    .weather-stat-row span:first-child {
+      color: #94a3b8;
+    }
+    .weather-stat-row span:last-child {
+      color: #ffffff;
+      font-weight: 600;
     }
     .status-pulse-dot {
       width: 8px;
@@ -117,6 +223,9 @@
     .hud-center-status {
       display: flex;
       gap: 12px;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
     }
     .hud-header-right {
       display: flex;
@@ -167,7 +276,7 @@
     }
     .interaction-prompt {
       position: absolute;
-      top: calc(50% + 36px);
+      bottom: 80px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(15, 23, 42, 0.85);
@@ -194,11 +303,13 @@
     }
     .minimap-container {
       position: absolute;
-      top: 80px;
-      right: 24px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      bottom: 24px;
+      left: 24px;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
       padding: 12px;
       pointer-events: auto;
@@ -268,18 +379,25 @@
       font-size: 10px;
     }
     .hud-footer {
-      padding: 16px 24px;
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
       justify-content: center;
+      pointer-events: none;
+      z-index: 20;
     }
     .hud-controls-toolbar {
       display: flex;
       gap: 10px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
       padding: 6px 12px;
       border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       pointer-events: auto;
     }
     .toolbar-btn {
@@ -303,86 +421,134 @@
     .icon-only {
       padding: 8px 12px;
     }
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); filter: drop-shadow(0 10px 15px rgba(2, 132, 199, 0.3)); }
+      100% { transform: translateY(0px); }
+    }
+    @keyframes card-entry {
+      from { opacity: 0; transform: scale(0.95) translateY(30px); filter: blur(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+    }
     .welcome-overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(5, 7, 12, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: radial-gradient(circle at center, rgba(15, 23, 42, 0.7) 0%, rgba(5, 7, 12, 0.95) 100%);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       z-index: 100;
       display: flex;
       align-items: center;
       justify-content: center;
       pointer-events: auto;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .welcome-card {
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 20px;
-      padding: 40px;
-      max-width: 520px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 48px;
+      max-width: 540px;
       text-align: center;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1), 0 0 100px rgba(2, 132, 199, 0.15);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      animation: card-entry 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     .welcome-icon {
-      font-size: 48px;
-      margin-bottom: 12px;
+      font-size: 56px;
+      margin-bottom: 16px;
+      display: inline-block;
+      animation: float 4s ease-in-out infinite;
     }
     .welcome-card h1 {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 800;
-      letter-spacing: 1px;
-      color: #f8fafc;
-      margin-bottom: 8px;
+      letter-spacing: 1.5px;
+      color: #ffffff;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     }
     .welcome-subtitle {
-      font-size: 14px;
+      font-size: 15px;
       color: #94a3b8;
-      margin-bottom: 24px;
+      margin-bottom: 32px;
+      line-height: 1.5;
     }
     .features-preview-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 28px;
+      gap: 12px;
+      margin-bottom: 36px;
       text-align: left;
     }
     .preview-badge {
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 500;
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
       color: #cbd5e1;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .preview-badge:hover {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
     }
     .start-app-btn {
       width: 100%;
       background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-      border: none;
+      border: 1px solid rgba(56, 189, 248, 0.3);
       color: #ffffff;
-      padding: 14px 24px;
-      border-radius: 12px;
-      font-size: 15px;
+      padding: 16px 24px;
+      border-radius: 14px;
+      font-size: 16px;
       font-weight: 700;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
-      transition: all 0.2s ease;
+      box-shadow: 0 8px 25px rgba(2, 132, 199, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .start-app-btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transform: skewX(-20deg);
+      transition: all 0.5s;
     }
     .start-app-btn:hover {
       background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.6);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(2, 132, 199, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    }
+    .start-app-btn:hover::after {
+      left: 150%;
+    }
+    .start-app-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
     }
     .start-hint {
-      font-size: 11px;
+      font-size: 12px;
       color: #64748b;
-      margin-top: 12px;
+      margin-top: 16px;
+      letter-spacing: 0.5px;
     }
     .settings-drawer {
       position: absolute;
@@ -418,8 +584,102 @@
       pointer-events: auto;
       display: flex;
       flex-direction: column;
-      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.4s, transform 0.4s, top 0.4s, left 0.4s, right 0.4s, box-shadow 0.4s, background 0.4s;
       gap: 16px;
+      
+      /* Make resize handle appear on the bottom-left so it works with right-aligned elements */
+      direction: rtl; 
+      resize: both;
+      overflow: hidden;
+      min-width: 250px;
+      min-height: 300px;
+    }
+    .chat-drawer > * {
+      direction: ltr; /* Reset text direction for children */
+    }
+    .chat-drawer::-webkit-resizer {
+      background-color: transparent;
+      background-image: 
+        linear-gradient(-45deg, transparent 40%, rgba(56, 189, 248, 0.8) 40%, rgba(56, 189, 248, 0.8) 50%, transparent 50%),
+        linear-gradient(-45deg, transparent 65%, rgba(56, 189, 248, 0.8) 65%, rgba(56, 189, 248, 0.8) 75%, transparent 75%);
+    }
+    .chat-drawer.chat-centered {
+      top: 50%;
+      left: 50%;
+      right: auto;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 70vh;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(30px);
+    }
+    .toast-container {
+      position: absolute;
+      top: 80px;
+      left: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 40;
+    }
+    .toast-notification {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #f8fafc;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 220px;
+      animation: toast-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .toast-notification.toast-hide {
+      animation: toast-slide-out 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .toast-header {
+      font-weight: 700;
+      color: #38bdf8;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .toast-body {
+      display: flex;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .toast-value-old {
+      color: #94a3b8;
+      text-decoration: line-through;
+    }
+    .toast-arrow {
+      color: #64748b;
+      margin: 0 8px;
+    }
+    .toast-value-new {
+      font-weight: 700;
+      color: #22c55e;
+    }
+    .toast-value-new.value-up {
+      color: #ef4444; /* red if hotter */
+    }
+    .toast-value-new.value-down {
+      color: #3b82f6; /* blue if cooler */
+    }
+    @keyframes toast-slide-in {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toast-slide-out {
+      from { opacity: 1; transform: translateX(0); }
+      to { opacity: 0; transform: translateX(-20px); }
     }
     .chat-messages {
       flex: 1;
@@ -581,7 +841,7 @@
         <div class="hud-brand">
           <div class="brand-logo-icon">🏢</div>
           <div class="brand-info">
-            <span class="brand-name">AURA HQ</span>
+            <span class="brand-name">DIGITAL BMS</span>
             <span class="brand-tag">3D WORKSPACE</span>
           </div>
         </div>
@@ -595,18 +855,39 @@
             <span class="mode-icon">👁️</span>
             <span id="mode-text">FPS WALKTHROUGH</span>
           </div>
+          <div id="time-badge" class="hud-pill time-pill">
+            <span class="time-icon">🕒</span>
+            <span id="time-text">08:00 AM</span>
+          </div>
+          <div id="weather-badge" class="hud-pill weather-pill">
+            <span class="weather-icon">☀️</span>
+            <span id="weather-text">--°C</span>
+            <button id="btn-toggle-weather" class="icon-btn weather-dropdown-btn">▼</button>
+            
+            <div id="weather-dropdown" class="weather-dropdown-panel hidden">
+              <div class="weather-dropdown-header">External Environment</div>
+              <div class="weather-stat-row">
+                <span>Temp:</span><span id="weather-out-temp">--°C</span>
+              </div>
+              <div class="weather-stat-row">
+                <span>Humidity:</span><span id="weather-out-hum">--%</span>
+              </div>
+              <div class="weather-stat-row">
+                <span>Solar Irr:</span><span id="weather-out-solar">-- W/m²</span>
+              </div>
+              <div class="weather-stat-row">
+                <span>Power Price:</span><span id="weather-out-price">$--/kWh</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="hud-header-right">
-          <div id="perf-stats" class="hud-pill perf-pill" title="Performance Telemetry">
-            <span id="fps-stat">60 FPS</span>
-            <span class="stat-divider">|</span>
-            <span id="draw-stat">32 DC</span>
-            <span class="stat-divider">|</span>
-            <span id="poly-stat">42k Tri</span>
-          </div>
         </div>
       </header>
+
+      <!-- Toast Notifications Container -->
+      <div id="toast-container" class="toast-container"></div>
 
       <!-- Center Crosshair / Reticle for FPS Mode -->
       <div id="reticle" class="reticle reticle-idle">
@@ -659,6 +940,10 @@
           <button id="btn-chat" class="toolbar-btn" title="AI Occupant Feedback [C]">
             <span class="btn-icon">💬</span>
             <span class="btn-text">Feedback AI [C]</span>
+          </button>
+          <button id="btn-activity" class="toolbar-btn" title="View AI Activity Log [L]">
+            <span class="btn-icon">📋</span>
+            <span class="btn-text">Activity Log [L]</span>
           </button>
           <button id="btn-help" class="toolbar-btn" title="Controls & Shortcuts Guide [H]">
             <span class="btn-icon">❓</span>
@@ -725,6 +1010,17 @@
         </div>
       </div>
 
+      <!-- Activity Log Drawer -->
+      <aside id="activity-drawer" class="settings-drawer hidden" style="left: 16px; right: auto; width: 340px;">
+        <div class="settings-header">
+          <h2>AI Activity Log</h2>
+          <button id="btn-close-activity" class="icon-btn">✖</button>
+        </div>
+        <div id="activity-log-content" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+          <div id="activity-log-empty" style="color: #94a3b8; font-size: 13px; text-align: center; margin-top: 20px;">No recent activity</div>
+        </div>
+      </aside>
+
       <!-- Slide-Out Settings Drawer -->
       <div id="settings-drawer" class="settings-drawer hidden">
         <div class="drawer-header">
@@ -744,7 +1040,7 @@
       </div>
 
       <!-- Chat Drawer -->
-      <div id="chat-drawer" class="chat-drawer hidden">
+      <div id="chat-drawer" class="chat-drawer">
         <div class="drawer-header">
           <h3>Occupant Feedback AI</h3>
           <button id="btn-close-chat" class="icon-btn" title="Close Chat">✕</button>
@@ -762,17 +1058,48 @@
         </form>
       </div>
 
+      <!-- TV Dashboard Panel (Triggered by Screen Interaction) -->
+      <div id="tv-dashboard-overlay" class="tv-dashboard-overlay hidden">
+        <div class="tv-dashboard-panel">
+          <div class="tv-dashboard-header">
+            <h3>Executive Lounge Operations</h3>
+            <button id="btn-close-tv" class="icon-btn" title="Close Dashboard">✕</button>
+          </div>
+          <div class="tv-dashboard-content" style="display:flex; flex-direction:column; gap:12px;">
+            <div class="weather-dropdown-header">Live Telemetry (Zone 4)</div>
+            <div class="weather-stat-row">
+              <span>Temperature:</span><span id="tv-stat-temp">--°C</span>
+            </div>
+            <div class="weather-stat-row">
+              <span>Humidity:</span><span id="tv-stat-hum">--%</span>
+            </div>
+            <div class="weather-stat-row">
+              <span>Airflow (CFM):</span><span id="tv-stat-cfm">--</span>
+            </div>
+            <div class="weather-stat-row">
+              <span>CO2 Level:</span><span id="tv-stat-co2">-- ppm</span>
+            </div>
+            <div class="weather-stat-row">
+              <span>HVAC Power:</span><span id="tv-stat-pwr">-- kW</span>
+            </div>
+            <div class="weather-stat-row">
+              <span>Target Setpoint:</span><span id="tv-stat-setpoint">--°C</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Initial Welcome / Click-to-Start Overlay -->
       <div id="overlay-start" class="welcome-overlay">
         <div class="welcome-card">
           <div class="welcome-icon">🏢</div>
-          <h1>AURA CORP HEADQUARTERS</h1>
+          <h1>DIGITAL BMS</h1>
           <p class="welcome-subtitle">Immersive 3D Corporate Workspace & Interactive Digital Twin</p>
           <div class="features-preview-row">
-            <div class="preview-badge">✨ 4 Distinct Zones</div>
-            <div class="preview-badge">🎮 Dual FPS / Orbit Navigation</div>
-            <div class="preview-badge">💻 Interactive Live Screens</div>
-            <div class="preview-badge">🔊 Spatial Audio Synthesizer</div>
+            <div class="preview-badge">🗣️ NLP + LLM Feedback</div>
+            <div class="preview-badge">🤖 RL Agent</div>
+            <div class="preview-badge">⚡ Real-Time Simulation</div>
+            <div class="preview-badge">🏢 3D Digital Twin</div>
           </div>
           <button id="btn-start-app" class="start-app-btn">ENTER WORKSPACE</button>
           <p class="start-hint">Clicking initiates WebGL, Audio Engine & Camera</p>

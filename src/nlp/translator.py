@@ -12,20 +12,22 @@ import os
 import re
 import urllib.request
 import urllib.error
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from src.nlp.fallback_parser import DeterministicFallbackParser
 from src.nlp.schemas import (
-    NLPTranslationResult,
-    ThermalIntent,
-    UrgencyLevel,
-    ZoneConstraint,
+    SemanticTranslationResult,
+    ComfortIntent,
+    SeverityLevel,
+    SuspectedCause,
+    ComfortEvent,
 )
 
 logger = logging.getLogger("hvac.nlp.translator")
 
 SYSTEM_PROMPT = """You are an expert Building Automation and HVAC Comfort Translation AI.
-Your task is to analyze natural language occupant feedback and translate it into a structured environmental constraint JSON object.
+Your task is to analyze natural language occupant feedback and extract the semantics into a structured event JSON object.
+Do NOT attempt to prescribe physical temperature or humidity offsets; you must only extract the occupant's INTENT, CAUSE, and SEVERITY.
 
 Valid Zone IDs:
 - 'lobby'
@@ -34,40 +36,49 @@ Valid Zone IDs:
 - 'server_room'
 
 Valid Intents:
-- 'too_cold' (occupant feels cold/freezing/chilly -> temperature_offset_c must be POSITIVE, e.g. +1.0 to +3.0)
-- 'too_warm' (occupant feels hot/warm/sweltering -> temperature_offset_c must be NEGATIVE, e.g. -1.0 to -3.5)
-- 'too_humid' (occupant feels humid/sticky -> humidity_offset_pct must be NEGATIVE, e.g. -5 to -15)
-- 'too_dry' (occupant feels dry/arid -> humidity_offset_pct must be POSITIVE, e.g. +5 to +15)
-- 'stuffy' (poor air/stale air -> intent 'stuffy', temperature_offset_c -1.0, humidity_offset_pct -5.0)
-- 'comfortable' (satisfactory comfort -> temperature_offset_c 0.0)
-- If the occupant requests an absolute target temperature (e.g. "set temperature to 26C"), calculate the offset relative to a 22.0C baseline. (e.g. 26C -> offset of +4.0).
-- If the occupant mentions a change in room occupancy (e.g. "two more people entered" or "five people left"), adjust the temperature offset to counteract their body heat: DECREASE the temperature offset by 0.5C per additional person, or INCREASE it by 0.5C per person leaving. Set the intent to 'too_warm' for entering or 'too_cold' for leaving.
+- 'too_cold' (occupant feels cold/freezing/chilly)
+- 'too_warm' (occupant feels hot/warm/sweltering)
+- 'too_humid' (occupant feels humid/sticky)
+- 'too_dry' (occupant feels dry/arid)
+- 'stuffy' (poor air/stale air)
+- 'drafty' (feeling air blowing directly on them)
+- 'comfortable' (satisfactory comfort)
+- 'unknown' (cannot determine intent)
 
-Urgency Levels:
-- 'high' (critical, emergency, spiking, freezing, boiling, max cooling, immediately)
+Valid Suspected Causes:
+- 'draft'
+- 'solar_gain'
+- 'high_occupancy'
+- 'equipment_heat'
+- 'hvac_inactive'
+- 'weather_extreme'
+- 'unspecified'
+
+Severity Levels:
+- 'critical' (emergency, health risk, freezing, boiling)
+- 'high' (strong discomfort)
 - 'medium' (standard complaint)
 - 'low' (mild, slight, a bit chilly/warm)
 
 Applicability Rules:
-- If the query is NOT related to indoor thermal comfort, humidity, or air quality (e.g. cafeteria hours, wifi, parking, general questions), set is_applicable to false and constraints to [].
-- If the query is a simple status question ("what is the temperature?"), set is_applicable to false, constraints to [], but provide the answer using live building context in response_text.
-- If is_applicable is true, constraints MUST contain at least one valid ZoneConstraint.
+- If the query is NOT related to indoor thermal comfort, humidity, or air quality (e.g. cafeteria hours, wifi, parking, general questions), set is_applicable to false and events to [].
+- If the query is a simple status question ("what is the temperature?"), set is_applicable to false, events to [], but provide the answer using live building context in response_text.
+- If the query asks about current room occupancy ("how many people are in the open office?"), set is_applicable to false, events to [], and accurately answer using the exact `occupancy_count` from the LIVE BUILDING CONTEXT in your response_text. Do NOT guess or hallucinate numbers.
+- If is_applicable is true, events MUST contain at least one valid ComfortEvent.
 
 JSON Output Schema (Do NOT include any extra keys):
 {
   "raw_query": string,
   "is_applicable": boolean,
   "response_text": string,
-  "constraints": [
+  "events": [
     {
       "zone_id": string,
-      "intent": "too_cold" | "too_warm" | "too_humid" | "too_dry" | "stuffy" | "comfortable",
-      "temperature_offset_c": float,
-      "humidity_offset_pct": float,
-      "target_temp_bounds_c": [min_temp, max_temp] or null,
-      "urgency": "low" | "medium" | "high",
-      "duration_minutes": integer,
-      "confidence": float,
+      "intent": "too_cold" | "too_warm" | "too_humid" | "too_dry" | "stuffy" | "drafty" | "comfortable" | "unknown",
+      "suspected_cause": "draft" | "solar_gain" | "high_occupancy" | "equipment_heat" | "hvac_inactive" | "weather_extreme" | "unspecified",
+      "severity": "low" | "medium" | "high" | "critical",
+      "confidence": float (0.0 to 1.0),
+      "duration_minutes": integer (default 60),
       "reasoning": string
     }
   ],
@@ -88,7 +99,7 @@ def clean_json_markdown(text: str) -> str:
     return cleaned.strip()
 
 
-def _call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-3.6-flash") -> str:
+def _call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-flash-latest") -> str:
     """
     Attempts to call Gemini API via available SDKs or direct REST fallback,
     with exponential backoff for 429 Too Many Requests errors.
@@ -178,9 +189,9 @@ def _call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-3.6-fl
                 data = json.loads(body)
                 return data["candidates"][0]["content"]["parts"][0]["text"]
         except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < max_retries - 1:
+            if e.code in (429, 503) and attempt < max_retries - 1:
                 sleep_time = base_delay * (2 ** attempt)
-                logger.warning(f"HTTP 429 Too Many Requests. Retrying in {sleep_time}s...")
+                logger.warning(f"HTTP {e.code} error. Retrying in {sleep_time}s...")
                 import os
                 if "PYTEST_CURRENT_TEST" not in os.environ:
                     time.sleep(sleep_time)
@@ -194,13 +205,13 @@ def translate_complaint(
     text: str,
     current_time: Optional[float] = None,
     api_key: Optional[str] = None,
-    model_name: str = "gemini-3.6-flash",
+    model_name: str = "gemini-flash-latest",
     live_building_state: Optional[Dict[str, Any]] = None,
     outdoor_temp_c: float = 25.0,
     history: Optional[List[Dict[str, str]]] = None,
-) -> NLPTranslationResult:
+) -> SemanticTranslationResult:
     """
-    Translates an occupant natural language complaint into a structured constraint model.
+    Translates an occupant natural language complaint into a structured semantic model.
     Seamlessly falls back to DeterministicFallbackParser on missing key, network error,
     timeout, or schema validation failure.
     """
@@ -245,8 +256,14 @@ def translate_complaint(
         if "timestamp" not in parsed_dict or parsed_dict["timestamp"] == 0.0:
             parsed_dict["timestamp"] = timestamp
             
+        # Add a default 'source' to events
+        if "events" in parsed_dict:
+            for ev in parsed_dict["events"]:
+                if "source" not in ev:
+                    ev["source"] = "LLM"
+                    
         # Enforce exact Pydantic schema validation (with extra="forbid")
-        result = NLPTranslationResult.model_validate(parsed_dict)
+        result = SemanticTranslationResult.model_validate(parsed_dict)
         return result
     except Exception as exc:
         logger.warning(

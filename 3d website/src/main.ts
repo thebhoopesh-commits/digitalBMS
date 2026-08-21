@@ -9,6 +9,7 @@ import { InteractiveProps } from './interaction/InteractiveProps';
 import { ChatManager } from './interaction/ChatManager';
 import { Minimap } from './hud/Minimap';
 import { HVACDataStore } from './data/HVACDataStore';
+import { NPCManager } from './scene/NPCManager';
 import { IOfficeDebug, LightingPresetName } from './types';
 
 async function bootstrap() {
@@ -72,12 +73,13 @@ async function bootstrap() {
   const minimap = minimapCanvas ? new Minimap(minimapCanvas) : null;
 
   // 7c. Initialize Chat Manager
-  const chatManager = new ChatManager();
+  const chatManager = new ChatManager(() => navigationManager.getCurrentZone());
 
   // 8. Wire Subsystems Update Hooks in Main Render Loop
   let time = 0;
   let lastUpdate = 0;
   const hvacStore = new HVACDataStore();
+  const npcManager = new NPCManager(sceneManager.scene, hvacStore);
 
   sceneManager.registerUpdateCallback((delta) => {
     time += delta;
@@ -86,6 +88,7 @@ async function bootstrap() {
     interactionManager.update(sceneManager.camera, navigationManager.mode);
     interactiveProps.update(delta);
     hvacStore.update(delta);
+    npcManager.update(delta);
 
     // Update minimap with current player position and facing direction
     if (minimap) {
@@ -165,12 +168,45 @@ async function bootstrap() {
     }
   };
 
+  const toggleActivityDrawer = () => {
+    const drawer = document.getElementById('activity-drawer');
+    if (drawer) {
+      drawer.classList.toggle('hidden');
+    }
+  };
+
   const toggleHelpModal = () => {
     const modal = document.getElementById('help-modal');
     if (modal) {
       modal.classList.toggle('hidden');
     }
   };
+
+  const toggleTVDashboard = () => {
+    const overlay = document.getElementById('tv-dashboard-overlay');
+    if (overlay) {
+      overlay.classList.toggle('hidden');
+      if (!overlay.classList.contains('hidden')) {
+        navigationManager.fpsController.unlock();
+      }
+    }
+  };
+  
+  document.addEventListener('open-tv-dashboard', () => {
+    const overlay = document.getElementById('tv-dashboard-overlay');
+    if (overlay && overlay.classList.contains('hidden')) {
+      toggleTVDashboard();
+    }
+  });
+
+  document.addEventListener('open-centered-chat', () => {
+    const chat = document.getElementById('chat-drawer');
+    if (chat) {
+      chat.classList.add('chat-centered');
+      chat.classList.remove('hidden');
+      navigationManager.fpsController.unlock();
+    }
+  });
 
   const toggleMute = () => {
     const isMuted = audioManager.toggleMute();
@@ -179,6 +215,68 @@ async function bootstrap() {
       audioIcon.textContent = isMuted ? '🔇' : '🔊';
     }
   };
+
+  // 12b. Toast Notifications
+  document.addEventListener('temp-setpoint-changed', (e: any) => {
+    const detail = e.detail;
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    // Create Toast Element
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    
+    // Format Zone Name
+    const zoneName = detail.zone.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+    
+    // Format Values
+    const oldVal = detail.oldVal.toFixed(1);
+    const newVal = detail.newVal.toFixed(1);
+    
+    const valueClass = detail.newVal > detail.oldVal ? 'value-up' : 'value-down';
+    const actionText = detail.newVal > detail.oldVal ? 'Increasing Temperature' : 'Reducing Temperature';
+    
+    toast.innerHTML = `
+      <div class="toast-header">${zoneName} Setpoint Update</div>
+      <div class="toast-body" style="justify-content: center; font-weight: bold; padding: 10px 0;">
+        <span class="${valueClass}">${actionText}</span>
+      </div>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-dismiss after 4 seconds
+    setTimeout(() => {
+      toast.classList.add('toast-hide');
+      toast.addEventListener('animationend', () => {
+        if (toast.parentElement) {
+          toast.remove();
+        }
+      });
+    }, 4000);
+
+    // --- Add to Activity Log ---
+    const logContent = document.getElementById('activity-log-content');
+    const emptyMsg = document.getElementById('activity-log-empty');
+    if (logContent) {
+      if (emptyMsg) emptyMsg.style.display = 'none';
+
+      const logItem = document.createElement('div');
+      logItem.style.cssText = 'background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; font-size: 13px; color: #f8fafc;';
+      
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      logItem.innerHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: #94a3b8;">
+          <span style="color: #38bdf8; font-weight: bold;">${zoneName}</span>
+          <span>${timeStr}</span>
+        </div>
+        <div>${actionText} (Target: <span class="${valueClass}" style="font-weight: bold;">${newVal}°C</span>)</div>
+      `;
+      
+      logContent.prepend(logItem); // Add to top
+    }
+  });
 
   // 13. Keyboard Controls & Shortcuts
   window.addEventListener('keydown', (e) => {
@@ -191,6 +289,12 @@ async function bootstrap() {
     }
 
     switch (e.key) {
+      case 'Enter':
+        const startOverlay = document.getElementById('overlay-start');
+        if (startOverlay && !startOverlay.classList.contains('hidden')) {
+          document.getElementById('btn-start-app')?.click();
+        }
+        break;
       case 'b':
       case 'B':
         if (navigationManager.mode === 'focus') {
@@ -218,6 +322,10 @@ async function bootstrap() {
       case 'C':
         chatManager.toggleDrawer();
         break;
+      case 'l':
+      case 'L':
+        toggleActivityDrawer();
+        break;
       case 'h':
       case 'H':
         toggleHelpModal();
@@ -241,7 +349,7 @@ async function bootstrap() {
     fetch('/api/simulation/control', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'start', speed: 1.0 })
+      body: JSON.stringify({ action: 'start', speed: 0.2 })
     }).catch(err => console.error("Failed to start backend simulation:", err));
 
     await audioManager.init();
@@ -251,12 +359,19 @@ async function bootstrap() {
 
   document.getElementById('btn-mode-toggle')?.addEventListener('click', toggleViewMode);
   document.getElementById('btn-settings')?.addEventListener('click', toggleSettingsDrawer);
-  document.getElementById('btn-close-settings')?.addEventListener('click', toggleSettingsDrawer);
-  document.getElementById('btn-chat')?.addEventListener('click', () => chatManager.toggleDrawer());
+  document.getElementById('btn-activity')?.addEventListener('click', toggleActivityDrawer);
+  document.getElementById('btn-close-activity')?.addEventListener('click', toggleActivityDrawer);
+  document.getElementById('btn-chat')?.addEventListener('click', () => {
+    chatManager.toggleDrawer();
+  });
   document.getElementById('btn-help')?.addEventListener('click', toggleHelpModal);
   document.getElementById('btn-close-help')?.addEventListener('click', toggleHelpModal);
   document.getElementById('btn-ack-help')?.addEventListener('click', toggleHelpModal);
   document.getElementById('btn-audio-mute')?.addEventListener('click', toggleMute);
+  document.getElementById('btn-toggle-weather')?.addEventListener('click', () => {
+    document.getElementById('weather-dropdown')?.classList.toggle('hidden');
+  });
+  document.getElementById('btn-close-tv')?.addEventListener('click', toggleTVDashboard);
 
   // Quick Teleport Buttons
   document.querySelectorAll('.teleport-btn').forEach(btn => {
@@ -278,15 +393,54 @@ async function bootstrap() {
     });
   });
 
-  // 15. Per-Frame UI Telemetry Hook
-  const fpsStat = document.getElementById('fps-stat');
-  const drawStat = document.getElementById('draw-stat');
-  const polyStat = document.getElementById('poly-stat');
+  const timeText = document.getElementById('time-text');
 
   sceneManager.registerUpdateCallback(() => {
-    if (fpsStat) fpsStat.textContent = `${sceneManager.getFPS()} FPS`;
-    if (drawStat) drawStat.textContent = `${sceneManager.getDrawCalls()} DC`;
-    if (polyStat) polyStat.textContent = `${Math.round(sceneManager.getTriangleCount() / 1000)}k Tri`;
+    if (timeText) {
+      const totalHours = hvacStore.currentSimHour % 24;
+      const hours = Math.floor(totalHours);
+      const minutes = Math.floor((totalHours - hours) * 60);
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const hr12 = hours % 12 === 0 ? 12 : hours % 12;
+      timeText.textContent = `${hr12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+    }
+
+    const weatherText = document.getElementById('weather-text');
+    if (weatherText) weatherText.textContent = `${hvacStore.outdoorTemp.toFixed(1)}°C`;
+    
+    const outTemp = document.getElementById('weather-out-temp');
+    if (outTemp) outTemp.textContent = `${hvacStore.outdoorTemp.toFixed(1)}°C`;
+    
+    const outHum = document.getElementById('weather-out-hum');
+    if (outHum) outHum.textContent = `${Math.round(hvacStore.outdoorHum)}%`;
+    
+    const outSolar = document.getElementById('weather-out-solar');
+    if (outSolar) outSolar.textContent = `${Math.round(hvacStore.solarIrr)} W/m²`;
+    
+    const outPrice = document.getElementById('weather-out-price');
+    if (outPrice) outPrice.textContent = `$${hvacStore.elecPrice.toFixed(2)}/kWh`;
+
+    // TV Dashboard Updates
+    const tvZoneData = hvacStore.getZoneData('open_office');
+    if (tvZoneData) {
+      const tvTemp = document.getElementById('tv-stat-temp');
+      if (tvTemp) tvTemp.textContent = `${tvZoneData.temp.toFixed(1)}°C`;
+      
+      const tvHum = document.getElementById('tv-stat-hum');
+      if (tvHum) tvHum.textContent = `${Math.round(tvZoneData.humidity)}%`;
+      
+      const tvCfm = document.getElementById('tv-stat-cfm');
+      if (tvCfm) tvCfm.textContent = `${Math.round(tvZoneData.airflowCFM)}`;
+      
+      const tvCo2 = document.getElementById('tv-stat-co2');
+      if (tvCo2) tvCo2.textContent = `${Math.round(tvZoneData.co2)} ppm`;
+      
+      const tvPwr = document.getElementById('tv-stat-pwr');
+      if (tvPwr) tvPwr.textContent = `${tvZoneData.powerDraw.toFixed(2)} kW`;
+      
+      const tvSet = document.getElementById('tv-stat-setpoint');
+      if (tvSet) tvSet.textContent = `${tvZoneData.targetTemp.toFixed(1)}°C`;
+    }
   });
 
   // 16. window.__OFFICE_DEBUG__ Automation Contract

@@ -39,7 +39,7 @@ export class NavigationManager implements INavigationManager {
 
   private scene: THREE.Scene;
   private domElement!: HTMLElement;
-  private currentZoneId: ZoneId = 'entrance';
+  private currentZoneId: ZoneId = 'lobby';
 
   // Parabolic transition state
   private transition: TransitionState = {
@@ -83,9 +83,9 @@ export class NavigationManager implements INavigationManager {
     this.fpsController.init(domElement, this.camera);
     this.orbitController.init(domElement, this.camera);
 
-    // Initial state: Start in FPS mode at entrance
-    const spawn = OFFICE_ZONES.entrance.spawnPosition;
-    const yaw = OFFICE_ZONES.entrance.spawnYaw;
+    // Initial state: Start in FPS mode at lobby
+    const spawn = OFFICE_ZONES.lobby.spawnPosition;
+    const yaw = OFFICE_ZONES.lobby.spawnYaw;
     this.setPosition(spawn, yaw);
 
     this.fpsController.setEnabled(true);

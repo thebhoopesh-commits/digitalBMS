@@ -109,6 +109,10 @@ class HVACGymEnv(gym.Env):
         self.m_dot_inf = self.psychro_model.m_dot_inf
         self.g_occ = self.psychro_model.g_occ
         self.dehum_mult = (1.0 - self.psychro_model.shr) / self.psychro_model.h_fg
+        self.zone_volumes = np.array(
+            [z.volume_m3 for z in self.building_config.zones.values()],
+            dtype=np.float64,
+        )
 
         # Precomputed saturation vapor pressure table [-20.0°C to +60.0°C, step 0.1°C]
         self._psat_table = np.array(
@@ -163,6 +167,11 @@ class HVACGymEnv(gym.Env):
 
         self.w_base = np.zeros(self.num_zones, dtype=np.float64)
         self.w_rl = np.zeros(self.num_zones, dtype=np.float64)
+
+        self.co2_base = np.full(self.num_zones, 400.0, dtype=np.float64)
+        self.co2_rl = np.full(self.num_zones, 400.0, dtype=np.float64)
+        self.cfm_base = np.zeros(self.num_zones, dtype=np.float64)
+        self.cfm_rl = np.zeros(self.num_zones, dtype=np.float64)
 
         self.active_nlp_offsets = np.zeros(self.num_zones, dtype=np.float64)
         self.prev_action = np.zeros(self.num_zones, dtype=np.float32)
@@ -237,6 +246,11 @@ class HVACGymEnv(gym.Env):
         self.w_rl.fill(init_w)
         self.w_base.fill(init_w)
         self._last_rh_z_rl.fill(init_rh)
+        
+        self.co2_base.fill(400.0)
+        self.co2_rl.fill(400.0)
+        self.cfm_base.fill(0.0)
+        self.cfm_rl.fill(0.0)
 
         self.active_nlp_offsets.fill(0.0)
         self.prev_action.fill(0.0)
@@ -376,6 +390,11 @@ class HVACGymEnv(gym.Env):
         pb2 = (abs(qb2) / (cop_b2 * 1000.0) + fan_b2) if qb2 != 0.0 else self.fan_standby_kw[2]
         total_p_base_kw = pb0 + pb1 + pb2
         viol_b0, viol_b1, viol_b2 = eh_b0 + ec_b0, eh_b1 + ec_b1, eh_b2 + ec_b2
+        
+        # Approximate CFM based on fan energy and nominal capacity
+        self.cfm_base[0] = 800.0 if qb0 == 0.0 else 800.0 + (abs(qb0) / cap_b0) * 1200.0
+        self.cfm_base[1] = 1600.0 if qb1 == 0.0 else 1600.0 + (abs(qb1) / cap_b1) * 2400.0
+        self.cfm_base[2] = 800.0 if qb2 == 0.0 else 800.0 + (abs(qb2) / cap_b2) * 1200.0
 
         # 4. Evaluate RL Twin Controls
         sp_r0 = max(16.0, min(28.0, 22.0 + a0 + nlp0))
@@ -406,6 +425,10 @@ class HVACGymEnv(gym.Env):
         pr1 = (abs(qr1) / (cop_r1 * 1000.0) + fan_r1) if qr1 != 0.0 else self.fan_standby_kw[1]
         pr2 = (abs(qr2) / (cop_r2 * 1000.0) + fan_r2) if qr2 != 0.0 else self.fan_standby_kw[2]
         total_p_rl_kw = pr0 + pr1 + pr2
+
+        self.cfm_rl[0] = 800.0 if qr0 == 0.0 else 800.0 + (abs(qr0) / cap_r0) * 1200.0
+        self.cfm_rl[1] = 1600.0 if qr1 == 0.0 else 1600.0 + (abs(qr1) / cap_r1) * 2400.0
+        self.cfm_rl[2] = 800.0 if qr2 == 0.0 else 800.0 + (abs(qr2) / cap_r2) * 1200.0
 
         viol_r0 = max(0.0, ashrae_h0 - tr0) + max(0.0, tr0 - ashrae_c0)
         viol_r1 = max(0.0, ashrae_h1 - tr1) + max(0.0, tr1 - ashrae_c1)
@@ -498,6 +521,24 @@ class HVACGymEnv(gym.Env):
         self.w_rl[1] = max(0.0, min(wsat_r1, self.w_rl[1] + dw_r1))
         self.w_rl[2] = max(0.0, min(wsat_r2, self.w_rl[2] + dw_r2))
 
+        # 8. CO2 Mass Balance ODE Step
+        # C(t+1) = C(t) + dt / V * (occ * g_occ_co2 + CFM_vent * (C_out - C(t)))
+        # g_occ_co2 approx 0.005 L/s/person * 1000 = 5.0 ml/s/person. CFM to m3/s = 0.00047
+        g_occ_co2 = 5.0 # (ml/s) / person -> scales properly with ppm (ml/m3)
+        dt_s = dt_step
+        
+        for i in range(3):
+            vol = self.zone_volumes[i]
+            # Baseline CO2 update
+            vent_m3_s_b = self.cfm_base[i] * 0.00047 * 0.1 # 10% fresh air fraction
+            dco2_b = (occ[i] * g_occ_co2 + vent_m3_s_b * (400.0 - self.co2_base[i])) * dt_s / vol
+            self.co2_base[i] = max(400.0, min(2000.0, self.co2_base[i] + dco2_b))
+            
+            # RL CO2 update
+            vent_m3_s_r = self.cfm_rl[i] * 0.00047 * 0.1
+            dco2_r = (occ[i] * g_occ_co2 + vent_m3_s_r * (400.0 - self.co2_rl[i])) * dt_s / vol
+            self.co2_rl[i] = max(400.0, min(2000.0, self.co2_rl[i] + dco2_r))
+
         pv_b0 = (self.w_base[0] * 101325.0) / (0.62198 + self.w_base[0])
         pv_b1 = (self.w_base[1] * 101325.0) / (0.62198 + self.w_base[1])
         pv_b2 = (self.w_base[2] * 101325.0) / (0.62198 + self.w_base[2])
@@ -556,6 +597,8 @@ class HVACGymEnv(gym.Env):
             t_z_base=(tb0_new, tb1_new, tb2_new),
             t_sp_base=(22.0, 22.0, 22.0),
             rh_z_base=(rh_b0, rh_b1, rh_b2),
+            co2_base=tuple(float(x) for x in self.co2_base),
+            cfm_base=tuple(float(x) for x in self.cfm_base),
             occ_base=(int(occ[0]), int(occ[1]), int(occ[2])),
             p_base=(pb0, pb1, pb2),
             viol_base=(viol_b0, viol_b1, viol_b2),
@@ -563,6 +606,8 @@ class HVACGymEnv(gym.Env):
             t_z_rl=(tr0_new, tr1_new, tr2_new),
             t_sp_rl=(sp_r0, sp_r1, sp_r2),
             rh_z_rl=(rh_r0, rh_r1, rh_r2),
+            co2_rl=tuple(float(x) for x in self.co2_rl),
+            cfm_rl=tuple(float(x) for x in self.cfm_rl),
             occ_rl=(int(occ[0]), int(occ[1]), int(occ[2])),
             p_rl=(pr0, pr1, pr2),
             viol_rl=(viol_r0, viol_r1, viol_r2),

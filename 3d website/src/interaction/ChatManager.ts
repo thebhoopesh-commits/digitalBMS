@@ -5,7 +5,12 @@ export class ChatManager {
   private chatInput: HTMLInputElement | null = null;
   private isProcessing: boolean = false;
 
-  constructor() {
+  private getZoneContext: (() => string) | null = null;
+
+  constructor(getZoneContext?: () => string) {
+    if (getZoneContext) {
+      this.getZoneContext = getZoneContext;
+    }
     if (typeof window !== 'undefined') {
       this.cacheDOMElements();
       this.setupListeners();
@@ -39,6 +44,11 @@ export class ChatManager {
 
   public toggleDrawer(): void {
     if (this.chatDrawer) {
+      if (this.chatDrawer.classList.contains('chat-centered')) {
+        this.chatDrawer.classList.remove('chat-centered');
+        // If it was centered, we just uncenter it (which returns it to the right side).
+        // Optionally, we could hide it completely. We will let the toggle hide it.
+      }
       this.chatDrawer.classList.toggle('hidden');
       if (!this.chatDrawer.classList.contains('hidden') && this.chatInput) {
         this.chatInput.focus();
@@ -71,6 +81,17 @@ export class ChatManager {
     this.appendMessage('user', message);
     this.setProcessingState(true);
 
+    let backendMessage = message;
+    
+    // Check if the user is referring to their current location
+    const locationRegex = /\b(here|this room|this zone|this place|my location)\b/i;
+    if (locationRegex.test(message) && this.getZoneContext) {
+      const currentZone = this.getZoneContext();
+      if (currentZone) {
+        backendMessage = `${message}\n[System Context: The user's avatar is currently located in the "${currentZone}" zone. Apply this spatial context to the request.]`;
+      }
+    }
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -78,7 +99,7 @@ export class ChatManager {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          message: message,
+          message: backendMessage,
           history: this.history
         })
       });

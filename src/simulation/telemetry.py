@@ -19,6 +19,8 @@ class ZoneTelemetry(BaseModel):
     temperature_c: float = Field(description="Indoor dry-bulb air temperature (°C)")
     target_setpoint_c: float = Field(description="Active target temperature setpoint (°C)")
     humidity_pct: float = Field(description="Indoor relative humidity (%)")
+    co2_ppm: float = Field(description="Indoor CO2 concentration (ppm)")
+    airflow_cfm: float = Field(description="Active HVAC airflow rate (CFM)")
     occupancy_count: int = Field(description="Current occupant headcount")
     hvac_power_kw: float = Field(description="Active HVAC electrical power consumption (kW)")
     comfort_violation_c: float = Field(description="Deviation outside comfort bounds (°C)")
@@ -51,6 +53,7 @@ class StepTelemetry(BaseModel):
     # Cumulative Comfort Violations
     baseline_comfort_violation_total: float = Field(description="Cumulative baseline comfort violation integral (°C·step)")
     rl_comfort_violation_total: float = Field(description="Cumulative RL comfort violation integral (°C·step)")
+    safety_shield_interventions: int = Field(default=0, description="Total number of safety shield interventions")
 
     # Multi-Zone Breakdowns
     zones_baseline: Dict[str, ZoneTelemetry] = Field(description="Zone telemetry mapping for baseline twin")
@@ -76,10 +79,13 @@ class RawTelemetryRecord:
     cumulative_cost_saved_usd: float
     baseline_comfort_violation_total: float
     rl_comfort_violation_total: float
+    safety_shield_interventions: int
     zone_ids: List[str]
     t_z_base: Tuple[float, ...]
     t_sp_base: Tuple[float, ...]
     rh_z_base: Tuple[float, ...]
+    co2_base: Tuple[float, ...]
+    cfm_base: Tuple[float, ...]
     occ_base: Tuple[int, ...]
     p_base: Tuple[float, ...]
     viol_base: Tuple[float, ...]
@@ -87,6 +93,8 @@ class RawTelemetryRecord:
     t_z_rl: Tuple[float, ...]
     t_sp_rl: Tuple[float, ...]
     rh_z_rl: Tuple[float, ...]
+    co2_rl: Tuple[float, ...]
+    cfm_rl: Tuple[float, ...]
     occ_rl: Tuple[int, ...]
     p_rl: Tuple[float, ...]
     viol_rl: Tuple[float, ...]
@@ -100,6 +108,8 @@ class RawTelemetryRecord:
                 temperature_c=float(self.t_z_base[i]),
                 target_setpoint_c=float(self.t_sp_base[i]),
                 humidity_pct=float(self.rh_z_base[i]),
+                co2_ppm=float(self.co2_base[i]),
+                airflow_cfm=float(self.cfm_base[i]),
                 occupancy_count=int(self.occ_base[i]),
                 hvac_power_kw=float(self.p_base[i]),
                 comfort_violation_c=float(self.viol_base[i]),
@@ -114,6 +124,8 @@ class RawTelemetryRecord:
                 temperature_c=float(self.t_z_rl[i]),
                 target_setpoint_c=float(self.t_sp_rl[i]),
                 humidity_pct=float(self.rh_z_rl[i]),
+                co2_ppm=float(self.co2_rl[i]),
+                airflow_cfm=float(self.cfm_rl[i]),
                 occupancy_count=int(self.occ_rl[i]),
                 hvac_power_kw=float(self.p_rl[i]),
                 comfort_violation_c=float(self.viol_rl[i]),
@@ -139,6 +151,7 @@ class RawTelemetryRecord:
             cumulative_cost_saved_usd=self.cumulative_cost_saved_usd,
             baseline_comfort_violation_total=self.baseline_comfort_violation_total,
             rl_comfort_violation_total=self.rl_comfort_violation_total,
+            safety_shield_interventions=self.safety_shield_interventions,
             zones_baseline=zones_base,
             zones_rl=zones_rl,
         )

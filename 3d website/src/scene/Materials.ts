@@ -259,13 +259,13 @@ export function createWhiteboardCanvas(): HTMLCanvasElement {
   // Header Title
   ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 22px Inter, sans-serif';
-  ctx.fillText('SPRINT GOALS & SYSTEM ARCHITECTURE', 24, 38);
+  ctx.fillText('DIGITAL TWIN HVAC ARCHITECTURE', 24, 38);
 
-  // Kanban Columns
+  // Components Columns
   const cols = [
-    { title: 'BACKLOG', x: 24, color: '#64748b' },
-    { title: 'IN PROGRESS', x: 184, color: '#2563eb' },
-    { title: 'DONE (SHIPPED)', x: 344, color: '#16a34a' }
+    { title: 'INTERFACE', x: 24, color: '#64748b' },
+    { title: 'CORE ENGINE', x: 184, color: '#2563eb' },
+    { title: 'SIMULATION', x: 344, color: '#16a34a' }
   ];
 
   cols.forEach(col => {
@@ -286,43 +286,43 @@ export function createWhiteboardCanvas(): HTMLCanvasElement {
     ctx.fillText(text, x + 8, y + 26);
   };
 
-  drawSticky(24, 90, '#fef08a', '• WebGL Instancing');
-  drawSticky(24, 156, '#fef08a', '• Audio Spatial Synth');
-  drawSticky(184, 90, '#bbf7d0', '• Raycasting Hotspots');
-  drawSticky(184, 156, '#fed7aa', '• Sliding AABB Collision');
-  drawSticky(344, 90, '#bae6fd', '• Three.js PBR Engine');
-  drawSticky(344, 156, '#bae6fd', '• 4-Zone Floorplan');
+  drawSticky(24, 90, '#fef08a', '• 3D WebGL UI');
+  drawSticky(24, 156, '#fef08a', '• NLP Feedback Chat');
+  drawSticky(184, 90, '#bbf7d0', '• Fast Tabular RL Agent');
+  drawSticky(184, 156, '#fed7aa', '• Reward Engine');
+  drawSticky(344, 90, '#bae6fd', '• 3R2C Thermal Model');
+  drawSticky(344, 156, '#bae6fd', '• Psychrometrics');
 
   // Architecture Diagram on lower half
   ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 15px sans-serif';
-  ctx.fillText('Autonomous AI Agent Cluster', 24, 250);
+  ctx.fillText('Control Loop Architecture', 24, 250);
 
   ctx.strokeStyle = '#2563eb';
   ctx.lineWidth = 2;
   ctx.strokeRect(40, 270, 110, 45);
   ctx.fillStyle = '#1e293b';
   ctx.font = '12px sans-serif';
-  ctx.fillText('Orchestrator', 58, 298);
+  ctx.fillText('Digital Twin', 62, 298);
 
   ctx.beginPath();
   ctx.moveTo(150, 292); ctx.lineTo(210, 292);
   ctx.stroke();
 
   ctx.strokeRect(210, 270, 110, 45);
-  ctx.fillText('Workers (3)', 230, 298);
+  ctx.fillText('RL Agent', 238, 298);
 
   ctx.beginPath();
   ctx.moveTo(320, 292); ctx.lineTo(380, 292);
   ctx.stroke();
 
   ctx.strokeRect(380, 270, 100, 45);
-  ctx.fillText('Auditor Gate', 392, 298);
+  ctx.fillText('Zone HVAC', 396, 298);
 
   // Bottom Line Metrics
   ctx.fillStyle = '#16a34a';
   ctx.font = 'bold 16px sans-serif';
-  ctx.fillText('✓ 60 FPS Target Locked | Zero Latency Load', 24, 470);
+  ctx.fillText('✓ 5-Min Timesteps | Server-Sent Events', 24, 470);
 
   return canvas;
 }

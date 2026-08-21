@@ -19,6 +19,12 @@ export class HVACDataStore {
   private time: number = 0;
   private historyTick: number = 0;
   
+  public currentSimHour: number = 8.0;
+  public outdoorTemp: number = 0;
+  public outdoorHum: number = 0;
+  public solarIrr: number = 0;
+  public elecPrice: number = 0;
+  
   // Real data we will send to the UI
   private uiData: Record<string, ZoneHVACData> = {};
   private commandUiData!: ZoneHVACData;
@@ -56,7 +62,8 @@ export class HVACDataStore {
       score: 95,
       consumptionHistory: [4.8, 4.2, 3.9, 4.1, 4.5, 4.9, 5.2, 5.1, 4.7, 4.2],
       isCommandGlass: true,
-      activeAlerts: 0
+      activeAlerts: 0,
+      occupancy: 0
     };
   }
 
@@ -83,7 +90,8 @@ export class HVACDataStore {
       hvacMode: mode,
       score: 90,
       consumptionHistory: Array(10).fill(power),
-      activeAlerts: 0
+      activeAlerts: 0,
+      occupancy: 0
     };
   }
 
@@ -98,14 +106,27 @@ export class HVACDataStore {
           for (const [beZone, backendData] of Object.entries(data.zones_rl) as any) {
             const sd = this.zones[beZone];
             if (backendData && sd) {
+              const oldTarget = sd.targetTemp.getTarget();
+              if (oldTarget !== undefined && Math.abs(oldTarget - backendData.target_setpoint_c) > 0.3) {
+                document.dispatchEvent(new CustomEvent('temp-setpoint-changed', {
+                  detail: {
+                    zone: beZone,
+                    oldVal: oldTarget,
+                    newVal: backendData.target_setpoint_c
+                  }
+                }));
+              }
+              
               sd.temp.setTarget(backendData.temperature_c);
               sd.targetTemp.setTarget(backendData.target_setpoint_c);
               sd.humidity.setTarget(backendData.humidity_pct);
               sd.powerDraw.setTarget(backendData.hvac_power_kw);
               
-              // Mock CO2 and CFM based on live occupancy/power since backend doesn't output it
-              sd.airflowCFM.setTarget(backendData.hvac_power_kw * 400 + 800);
-              sd.co2.setTarget(400 + backendData.occupancy_count * 20);
+              sd.airflowCFM.setTarget(backendData.airflow_cfm || 0);
+              sd.co2.setTarget(backendData.co2_ppm || 400);
+              
+              // Expose occupancy directly to uiData for NPC rendering
+              this.uiData[beZone].occupancy = backendData.occupancy_count;
             }
           }
         }
@@ -113,6 +134,15 @@ export class HVACDataStore {
         // Global metrics
         if (data.rl_power_kw !== undefined) {
            this.commandData.powerDraw.setTarget(data.rl_power_kw);
+        }
+        if (data.timestamp_sim_hour !== undefined) {
+           this.currentSimHour = data.timestamp_sim_hour;
+        }
+        if (data.outdoor_temp_c !== undefined) {
+           this.outdoorTemp = data.outdoor_temp_c;
+           this.outdoorHum = data.outdoor_humidity_pct || 0;
+           this.solarIrr = data.solar_irradiance_w_m2 || 0;
+           this.elecPrice = data.electricity_price_usd_kwh || 0;
         }
       } catch (err) {
         console.error("SSE Parse Error", err);
@@ -132,6 +162,7 @@ export class HVACDataStore {
     let totalScore = 0;
     let totalTemp = 0;
     let zoneCount = 0;
+    let totalOccupancy = 0;
 
     for (const [zoneId, sd] of Object.entries(this.zones)) {
       const ui = this.uiData[zoneId];
@@ -161,6 +192,7 @@ export class HVACDataStore {
 
       totalScore += ui.score;
       totalTemp += ui.temp;
+      totalOccupancy += ui.occupancy;
       zoneCount++;
     }
 
@@ -179,6 +211,7 @@ export class HVACDataStore {
       this.commandUiData.temp = this.commandData.temp.get();
       this.commandUiData.powerDraw = this.commandData.powerDraw.get();
       this.commandUiData.score = this.commandData.score.get();
+      this.commandUiData.occupancy = totalOccupancy;
       
       if (addHistory) {
         this.commandUiData.consumptionHistory.shift();

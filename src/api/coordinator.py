@@ -18,7 +18,7 @@ from collections import deque
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from src.config import BuildingConfig, SimulationConfig, WeatherPreset
-from src.nlp.schemas import NLPTranslationResult
+from src.nlp.schemas import SemanticTranslationResult
 from src.nlp.translator import translate_complaint
 from src.nlp.preprocessor import NLPPreprocessor
 from src.simulation.dual_twin import DualTwinRunner
@@ -159,7 +159,7 @@ class SimulationCoordinator:
         message: str,
         history: Optional[List[Dict[str, str]]] = None,
         current_time_minutes: Optional[float] = None,
-    ) -> Tuple[NLPTranslationResult, bool]:
+    ) -> Tuple[SemanticTranslationResult, bool]:
         """Translates a chat message and injects any constraints into the simulator.
 
         Returns the NLPTranslationResult and a flag indicating whether the
@@ -188,9 +188,9 @@ class SimulationCoordinator:
         )
 
         applied = False
-        if translation.is_applicable and translation.constraints:
-            # 2. Inject constraints into the runner.
-            for c in translation.constraints:
+        if translation.is_applicable and translation.events:
+            # 2. Inject events into the runner via bridge.
+            for c in translation.events:
                 self.runner.inject_nlp_constraint(c)
             applied = True
 

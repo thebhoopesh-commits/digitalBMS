@@ -173,6 +173,7 @@ export class InteractiveProps {
         distanceCutoff: 4.5,
         onInteract: () => {
           this.audioManager.playChime();
+          document.dispatchEvent(new CustomEvent('open-centered-chat'));
         },
         getDetails: () => ({
           title: 'Receptionist Terminal',
@@ -460,10 +461,11 @@ export class InteractiveProps {
         name: 'Executive Lounge Smart TV',
         category: 'screen',
         mesh: this.floorplan.loungeTVMesh,
-        prompt: 'Switch Channel [E]',
+        prompt: 'View Telemetry [E]',
         distanceCutoff: 5.0,
         onInteract: () => {
           this.audioManager.playClick();
+          document.dispatchEvent(new CustomEvent('open-tv-dashboard'));
         },
         getDetails: () => ({
           title: 'Lounge 4K Smart TV',
