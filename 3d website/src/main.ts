@@ -278,11 +278,26 @@ async function bootstrap() {
 
   // 13. Keyboard Controls & Shortcuts
   window.addEventListener('keydown', (e) => {
-    // If the user is typing in the chat drawer (or any input), ignore hotkeys EXCEPT Escape/C for closing
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-      if (e.key === 'Escape' && chatManager.isDrawerOpen()) {
+    // If chat drawer is open, intercept all keys so the user doesn't accidentally trigger hotkeys
+    // when the chat input loses focus.
+    if (chatManager.isDrawerOpen()) {
+      if (e.key === 'Escape') {
         chatManager.toggleDrawer();
+        return;
       }
+      // If typing a printable character, ensure input is focused
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+        if (chatInput && document.activeElement !== chatInput) {
+          chatInput.focus();
+        }
+      }
+      // Ignore all other global hotkeys while chat is open
+      return;
+    }
+
+    // If typing in any other input (like settings), ignore hotkeys
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
       return;
     }
 
