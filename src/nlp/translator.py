@@ -99,96 +99,93 @@ def clean_json_markdown(text: str) -> str:
     return cleaned.strip()
 
 
-def _call_gemini_api(prompt: str, api_key: str, model_name: str = "gemini-flash-latest") -> str:
+def _call_openai_api(prompt: str, api_key: str, model_name: str = "gpt-4o-mini", base_url: str = None) -> str:
     """
-    Attempts to call Gemini API via available SDKs or direct REST fallback,
-    with exponential backoff for 429 Too Many Requests errors.
+    Attempts to call the LLM using the official OpenAI SDK,
+    with direct REST fallbacks if the SDK is unavailable.
     """
     import time
     max_retries = 3
     base_delay = 2.0
 
     for attempt in range(max_retries):
-        # 1. Try modern google-genai SDK
+        # 1. Try official openai SDK
         try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
+            import openai
+            client = openai.OpenAI(api_key=api_key, base_url=base_url)
+            response = client.chat.completions.create(
                 model=model_name,
-                contents=prompt,
-                config={"response_mime_type": "application/json"},
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.1
             )
-            if hasattr(response, "text") and response.text:
-                return response.text
+            if response.choices and response.choices[0].message.content:
+                return response.choices[0].message.content
         except Exception as e:
+            import logging
+            logger = logging.getLogger("hvac.nlp")
             if "429" in str(e):
-                logger.debug(f"genai SDK 429 error on attempt {attempt+1}")
+                logger.debug(f"OpenAI SDK 429 error on attempt {attempt+1}")
             else:
-                logger.debug(f"google-genai SDK attempt failed or unavailable: {e}")
+                logger.debug(f"OpenAI SDK attempt failed: {e}")
 
-        # 2. Try legacy google.generativeai SDK
-        try:
-            import google.generativeai as genai_legacy
-            from google.api_core.exceptions import ResourceExhausted
-            genai_legacy.configure(api_key=api_key)
-            model = genai_legacy.GenerativeModel(model_name)
-            response = model.generate_content(
-                prompt,
-                generation_config={"response_mime_type": "application/json"},
-            )
-            if hasattr(response, "text") and response.text:
-                return response.text
-        except Exception as e:
-            if "429" in str(e) or "ResourceExhausted" in type(e).__name__:
-                logger.debug(f"genai_legacy SDK 429 error on attempt {attempt+1}")
-            else:
-                logger.debug(f"google.generativeai SDK attempt failed or unavailable: {e}")
-
-        # 3. Direct HTTPS REST request fallback via requests
+        # 2. Direct HTTPS REST request fallback via requests
         try:
             import requests
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-            headers = {"Content-Type": "application/json"}
-            payload = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                    "temperature": 0.1,
-                },
+            url = base_url or "https://api.openai.com/v1"
+            url = url.rstrip("/") + "/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
             }
-            resp = requests.post(url, headers=headers, json=payload, timeout=5.0)
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.1
+            }
+            resp = requests.post(url, headers=headers, json=payload, timeout=10.0)
             resp.raise_for_status()
             data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            return data["choices"][0]["message"]["content"]
         except Exception as e:
+            import logging
+            logger = logging.getLogger("hvac.nlp")
             if hasattr(e, "response") and e.response is not None and e.response.status_code == 429:
                 logger.debug(f"requests REST 429 error on attempt {attempt+1}")
             else:
                 logger.debug(f"requests REST attempt failed: {e}")
 
-        # 4. Standard library urllib.request fallback (Zero third-party library dependencies)
+        # 3. Standard library urllib.request fallback
         try:
             import urllib.request
             import urllib.error
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            import json
+            url = base_url or "https://api.openai.com/v1"
+            url = url.rstrip("/") + "/chat/completions"
             payload_bytes = json.dumps({
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                    "temperature": 0.1,
-                },
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.1
             }).encode("utf-8")
+            
             req = urllib.request.Request(
                 url,
                 data=payload_bytes,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                },
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=30.0) as resp:
                 body = resp.read().decode("utf-8")
                 data = json.loads(body)
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                return data["choices"][0]["message"]["content"]
         except urllib.error.HTTPError as e:
+            import logging
+            logger = logging.getLogger("hvac.nlp")
             if e.code in (429, 503) and attempt < max_retries - 1:
                 sleep_time = base_delay * (2 ** attempt)
                 logger.warning(f"HTTP {e.code} error. Retrying in {sleep_time}s...")
@@ -205,7 +202,8 @@ def translate_complaint(
     text: str,
     current_time: Optional[float] = None,
     api_key: Optional[str] = None,
-    model_name: str = "gemini-flash-latest",
+    model_name: str = "gpt-4o-mini",
+    base_url: Optional[str] = None,
     live_building_state: Optional[Dict[str, Any]] = None,
     outdoor_temp_c: float = 25.0,
     history: Optional[List[Dict[str, str]]] = None,
@@ -216,10 +214,10 @@ def translate_complaint(
     timeout, or schema validation failure.
     """
     timestamp = current_time if current_time is not None else 0.0
-    key = api_key or os.environ.get("GEMINI_API_KEY")
+    key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
     if not key or not key.strip():
-        logger.debug("No GEMINI_API_KEY configured. Executing DeterministicFallbackParser.")
+        logger.debug("No LLM API KEY configured. Executing DeterministicFallbackParser.")
         return DeterministicFallbackParser.parse(text, timestamp=timestamp)
 
     context_block = ""
@@ -248,7 +246,7 @@ def translate_complaint(
     )
 
     try:
-        raw_response = _call_gemini_api(full_prompt, api_key=key.strip(), model_name=model_name)
+        raw_response = _call_openai_api(full_prompt, api_key=key.strip(), model_name=model_name, base_url=base_url)
         cleaned_json = clean_json_markdown(raw_response)
         parsed_dict = json.loads(cleaned_json)
         
