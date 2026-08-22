@@ -79,13 +79,24 @@ export class HVACCanvas {
     this.drawStatBox(650, 100, 'Avg Temp', `${data.temp.toFixed(1)}°C`, '#00f0ff');
     this.drawStatBox(420, 220, 'Baseline', `${data.baselinePower.toFixed(1)} kW`, '#aaaaaa');
     
-    // Alerts mock
-    ctx.fillStyle = '#ffb703';
-    ctx.font = 'bold 24px "Segoe UI", sans-serif';
-    ctx.fillText('⚠ 1 ACTIVE ALERT', 60, 420);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '20px "Segoe UI", sans-serif';
-    ctx.fillText('Lounge temperature is +2.1°C above setpoint. VAV checking...', 60, 460);
+    // Alerts — driven from real AlertEngine data
+    if (data.activeAlerts > 0) {
+      const alertColor = data.activeAlerts >= 2 ? '#ff3b30' : '#ffb703';
+      const alertLabel = data.activeAlerts >= 2 ? '🚨 CRITICAL ALERT' : '⚠ ACTIVE ALERT';
+      ctx.fillStyle = alertColor;
+      ctx.font = 'bold 24px "Segoe UI", sans-serif';
+      ctx.fillText(`${alertLabel}  (${data.activeAlerts} zone${data.activeAlerts > 1 ? 's' : ''})`, 60, 420);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '20px "Segoe UI", sans-serif';
+      ctx.fillText('Thermal anomaly detected — review zone dashboards', 60, 460);
+    } else {
+      ctx.fillStyle = '#00e676';
+      ctx.font = 'bold 22px "Segoe UI", sans-serif';
+      ctx.fillText('✓ All zones nominal — no active alerts', 60, 420);
+      ctx.fillStyle = '#aaaaaa';
+      ctx.font = '18px "Segoe UI", sans-serif';
+      ctx.fillText('System operating within comfort and energy bounds', 60, 455);
+    }
     
     // Footer
     ctx.fillStyle = '#00e676';

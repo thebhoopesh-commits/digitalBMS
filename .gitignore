@@ -5,6 +5,8 @@ test.py
 api_test.py
 run_tests.py
 task.md
+
+# Pitch decks
 *.pptx
 ~$*.pptx
 
@@ -20,9 +22,18 @@ requirements.txt
 PROJECT.pdf
 
 # Deprecated / superseded test files
-tests/test_constraint_bridge_adversarial_deprecated.py
-tests/test_nlp_adversarial_stress_deprecated.py
-tests/test_nlp_engine_deprecated.py
+tests/*_deprecated.py
+tests/verify_constraint_bridge_empirical.py
+tests/empirical_mutation_audit.py
+
+# 3D website test scripts (internal/build artefacts)
+3d website/tests/
+
+# ──────────────────────────────────────────────
+# Agent internal folders (never commit these)
+# ──────────────────────────────────────────────
+.agents/
+**/.agents/
 
 # ──────────────────────────────────────────────
 # Python
@@ -36,11 +47,8 @@ __pycache__/
 # Node / Vite
 # ──────────────────────────────────────────────
 node_modules/
-3d website/node_modules/
 dist/
-3d website/dist/
 .vite/
-3d website/.vite/
 .DS_Store
 
 # ──────────────────────────────────────────────
@@ -55,7 +63,6 @@ env/
 # ──────────────────────────────────────────────
 .vscode/
 .idea/
-.agents/
 
 # ──────────────────────────────────────────────
 # Logs & secrets

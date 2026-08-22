@@ -127,6 +127,22 @@ export class HVACDataStore {
               
               // Expose occupancy directly to uiData for NPC rendering
               this.uiData[beZone].occupancy = backendData.occupancy_count;
+
+              // Derive hvacMode from actual backend setpoint vs current temp
+              const tempDelta = (backendData.target_setpoint_c ?? 22) - (backendData.temperature_c ?? 22);
+              const nlpOffset = backendData.active_nlp_offset_c ?? 0;
+              const power = backendData.hvac_power_kw ?? 0;
+              if (power < 0.1) {
+                this.uiData[beZone].hvacMode = 'OFF';
+              } else if (nlpOffset > 0.5 || tempDelta > 1.0) {
+                this.uiData[beZone].hvacMode = 'HEATING';
+              } else if (nlpOffset < -0.5 || tempDelta < -1.0) {
+                this.uiData[beZone].hvacMode = 'COOLING';
+              } else if (power < 2.0) {
+                this.uiData[beZone].hvacMode = 'ECO';
+              } else {
+                this.uiData[beZone].hvacMode = 'AUTO';
+              }
             }
           }
         }

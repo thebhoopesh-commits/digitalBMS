@@ -146,9 +146,10 @@ async function bootstrap() {
   };
 
   // 10. Wire Zone Banner Update
-  navigationManager.onZoneChange = (_zoneId, zoneData) => {
+  navigationManager.onZoneChange = (zoneId: string, zoneData: any) => {
     const zoneText = document.getElementById('zone-text');
     if (zoneText) zoneText.textContent = zoneData.displayName;
+    // Live temp will be updated each frame in the render callback below
   };
 
   // 11. View Mode Toggle
@@ -222,59 +223,56 @@ async function bootstrap() {
     const container = document.getElementById('toast-container');
     if (!container) return;
     
-    // Create Toast Element
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    
     // Format Zone Name
     const zoneName = detail.zone.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
     
-    // Format Values
-    const oldVal = detail.oldVal.toFixed(1);
+    const isHeating = detail.newVal > detail.oldVal;
+    const icon = isHeating ? '🔥' : '❄️';
+    const actionText = isHeating ? 'Heating Adjusted' : 'Cooling Adjusted';
+    const borderColor = isHeating ? '#ef4444' : '#3b82f6';
+    const valueClass = isHeating ? 'value-up' : 'value-down';
     const newVal = detail.newVal.toFixed(1);
-    
-    const valueClass = detail.newVal > detail.oldVal ? 'value-up' : 'value-down';
-    const actionText = detail.newVal > detail.oldVal ? 'Increasing Temperature' : 'Reducing Temperature';
-    
+
+    // --- Toast ---
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.style.borderLeft = `4px solid ${borderColor}`;
     toast.innerHTML = `
-      <div class="toast-header">${zoneName} Setpoint Update</div>
-      <div class="toast-body" style="justify-content: center; font-weight: bold; padding: 10px 0;">
-        <span class="${valueClass}">${actionText}</span>
+      <div class="toast-header">${icon} ${zoneName}</div>
+      <div class="toast-body" style="justify-content: center; font-weight: bold; padding: 6px 0;">
+        <span class="${valueClass}">${actionText} → ${newVal}°C</span>
       </div>
     `;
-    
     container.appendChild(toast);
     
     // Auto-dismiss after 4 seconds
     setTimeout(() => {
       toast.classList.add('toast-hide');
       toast.addEventListener('animationend', () => {
-        if (toast.parentElement) {
-          toast.remove();
-        }
+        if (toast.parentElement) toast.remove();
       });
     }, 4000);
 
-    // --- Add to Activity Log ---
+    // --- Activity Log ---
     const logContent = document.getElementById('activity-log-content');
     const emptyMsg = document.getElementById('activity-log-empty');
     if (logContent) {
       if (emptyMsg) emptyMsg.style.display = 'none';
 
       const logItem = document.createElement('div');
-      logItem.style.cssText = 'background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; font-size: 13px; color: #f8fafc;';
+      logItem.style.cssText = `background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-left: 3px solid ${borderColor}; border-radius: 8px; padding: 12px; font-size: 13px; color: #f8fafc;`;
       
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
       logItem.innerHTML = `
         <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: #94a3b8;">
-          <span style="color: #38bdf8; font-weight: bold;">${zoneName}</span>
+          <span style="color: #38bdf8; font-weight: bold;">${icon} ${zoneName}</span>
           <span>${timeStr}</span>
         </div>
-        <div>${actionText} (Target: <span class="${valueClass}" style="font-weight: bold;">${newVal}°C</span>)</div>
+        <div>${actionText} — Setpoint: <span class="${valueClass}" style="font-weight: bold;">${newVal}°C</span></div>
       `;
       
-      logContent.prepend(logItem); // Add to top
+      logContent.prepend(logItem);
     }
   });
 
@@ -338,6 +336,25 @@ async function bootstrap() {
   });
 
   // 14. Wire HUD UI Buttons
+
+  // Backend connectivity check on load
+  (async () => {
+    const statusDot = document.getElementById('backend-status-dot');
+    const statusText = document.getElementById('backend-status-text');
+    try {
+      const res = await fetch('/api/status', { signal: AbortSignal.timeout(3000) });
+      const ok = res.ok;
+      if (statusDot) {
+        statusDot.style.background = ok ? '#22c55e' : '#ef4444';
+        statusDot.style.boxShadow = ok ? '0 0 8px #22c55e' : '0 0 8px #ef4444';
+      }
+      if (statusText) statusText.textContent = ok ? 'Backend Connected' : 'Backend Error';
+    } catch {
+      if (statusDot) { statusDot.style.background = '#ef4444'; statusDot.style.boxShadow = '0 0 8px #ef4444'; }
+      if (statusText) statusText.textContent = 'Backend Offline';
+    }
+  })();
+
   document.getElementById('btn-start-app')?.addEventListener('click', async () => {
     const overlay = document.getElementById('overlay-start');
     if (overlay) {
@@ -440,6 +457,16 @@ async function bootstrap() {
       
       const tvSet = document.getElementById('tv-stat-setpoint');
       if (tvSet) tvSet.textContent = `${tvZoneData.targetTemp.toFixed(1)}°C`;
+    }
+
+    // Live zone temperature in HUD zone pill
+    const currentZoneId = navigationManager.getCurrentZone();
+    const zoneHudTemp = document.getElementById('zone-live-temp');
+    if (zoneHudTemp && currentZoneId) {
+      const zd = hvacStore.getZoneData(currentZoneId);
+      if (zd) {
+        zoneHudTemp.textContent = `${zd.temp.toFixed(1)}°C`;
+      }
     }
   });
 
