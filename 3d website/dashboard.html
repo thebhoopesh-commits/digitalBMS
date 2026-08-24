@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Twin - Global Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --border: #334155;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .header {
+      background: var(--panel);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .nav-links a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover {
+      background: var(--accent);
+      color: white;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+    .stat-val {
+      font-weight: 600;
+      font-family: monospace;
+      font-size: 1.1rem;
+    }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button, select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover, select:hover {
+      border-color: var(--accent);
+    }
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    button.primary:hover {
+      opacity: 0.9;
+    }
+    .zone-card {
+      border-left: 4px solid var(--border);
+    }
+    .zone-card.heat { border-left-color: var(--red); }
+    .zone-card.cool { border-left-color: var(--accent); }
+    .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      margin-right: 8px;
+    }
+    .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1><span id="backend-dot" class="status-dot"></span> Digital Twin Global Control</h1>
+    <div class="nav-links">
+      <a href="/">← Back to 3D Immersive View</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid-3">
+      <!-- Controls -->
+      <div class="panel">
+        <h2>Simulation Controls</h2>
+        <div class="controls" style="margin-bottom: 1rem;">
+          <button id="btn-toggle" class="primary">Start</button>
+          <button id="btn-reset">Reset</button>
+        </div>
+        <div class="stat-row">
+          <span>Speed</span>
+          <select id="sel-speed">
+            <option value="0.5">0.5x (Slow)</option>
+            <option value="1.0" selected>1.0x (Normal)</option>
+            <option value="5.0">5.0x (Fast)</option>
+            <option value="20.0">20.0x (Hyper)</option>
+          </select>
+        </div>
+        <div class="stat-row">
+          <span>Weather Preset</span>
+          <select id="sel-weather">
+            <option value="SummerHot">Summer Hot</option>
+            <option value="WinterCold">Winter Cold</option>
+            <option value="MildSpring">Mild Spring</option>
+            <option value="HeatwaveStress">Heatwave</option>
+            <option value="RealTime">Real-Time API</option>
+          </select>
+        </div>
+        <div class="stat-row" style="margin-top: 1rem;">
+          <span>Sim Time</span>
+          <span id="val-sim-time" class="stat-val">00:00</span>
+        </div>
+      </div>
+
+      <!-- Environment -->
+      <div class="panel">
+        <h2>Outdoor Environment</h2>
+        <div class="stat-row">
+          <span>Temperature</span>
+          <span id="val-out-temp" class="stat-val">-- °C</span>
+        </div>
+        <div class="stat-row">
+          <span>Humidity</span>
+          <span id="val-out-rh" class="stat-val">-- %</span>
+        </div>
+        <div class="stat-row">
+          <span>Solar Irradiance</span>
+          <span id="val-out-solar" class="stat-val">-- W/m²</span>
+        </div>
+        <div class="stat-row">
+          <span>Electricity Price</span>
+          <span id="val-out-price" class="stat-val">-- $/kWh</span>
+        </div>
+      </div>
+
+      <!-- Energy Performance -->
+      <div class="panel">
+        <h2>Energy & Savings</h2>
+        <div class="stat-row">
+          <span>RL Power Draw</span>
+          <span id="val-rl-power" class="stat-val" style="color: var(--green);">-- kW</span>
+        </div>
+        <div class="stat-row">
+          <span>Baseline Power</span>
+          <span id="val-base-power" class="stat-val" style="color: var(--text-muted);">-- kW</span>
+        </div>
+        <div class="stat-row">
+          <span>Cum. Energy Saved</span>
+          <span id="val-cum-savings" class="stat-val">-- kWh</span>
+        </div>
+        <div class="stat-row">
+          <span>Cost Saved</span>
+          <span id="val-cost-savings" class="stat-val" style="color: var(--green);">$--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zones -->
+    <h2>Zone Status</h2>
+    <div id="zones-container" class="grid-3">
+      <!-- Zone cards injected by JS -->
+    </div>
+  </main>
+
+  <script type="module" src="/src/dashboard.ts"></script>
+</body>
+</html>

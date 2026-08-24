@@ -15,6 +15,7 @@ class WeatherPreset(str, Enum):
     WINTER_COLD = "WinterCold"
     MILD_SPRING = "MildSpring"
     HEATWAVE_STRESS = "HeatwaveStress"
+    REAL_TIME = "RealTime"
     STORM_FRONT = "StormFront"
 
 
