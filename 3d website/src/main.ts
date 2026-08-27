@@ -12,7 +12,9 @@ import { HVACDataStore } from './data/HVACDataStore';
 import { NPCManager } from './scene/NPCManager';
 import { IOfficeDebug, LightingPresetName } from './types';
 
+let manualTimeOverride: number | null = null;
 async function bootstrap() {
+
   console.log('🏗️ Initializing Aura Corp 3D Office Application...');
 
   // 1. Resolve DOM Containers
@@ -102,7 +104,8 @@ async function bootstrap() {
       
       // Update sun physics
       if (sceneManager.lightingManager.isRealtimeSunEnabled) {
-        sceneManager.lightingManager.updateRealtimeSun(hvacStore.currentSimHour, 12.9184, 79.1325);
+        const activeHour = manualTimeOverride !== null ? manualTimeOverride : hvacStore.currentSimHour;
+        sceneManager.lightingManager.updateRealtimeSun(activeHour, 12.9184, 79.1325);
       }
       
       if (floorplan.commandGlass) {
@@ -435,7 +438,7 @@ async function bootstrap() {
 
   sceneManager.registerUpdateCallback(() => {
     if (timeText) {
-      const totalHours = hvacStore.currentSimHour % 24;
+      const totalHours = manualTimeOverride !== null ? manualTimeOverride : (hvacStore.currentSimHour % 24);
       const hours = Math.floor(totalHours);
       const minutes = Math.floor((totalHours - hours) * 60);
       const ampm = hours >= 12 ? 'PM' : 'AM';
