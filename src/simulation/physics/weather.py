@@ -32,7 +32,7 @@ class WeatherSnapshot:
 
 class OpenMeteoClient:
     """Fetches live weather data from Open-Meteo for the REAL_TIME preset."""
-    def __init__(self, latitude=40.7143, longitude=-74.006):
+    def __init__(self, latitude=12.9184, longitude=79.1325):
         self.latitude = latitude
         self.longitude = longitude
         self._cache = None
