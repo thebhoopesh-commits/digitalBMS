@@ -99,6 +99,12 @@ async function bootstrap() {
     // Update HVAC mock data at 2 FPS to avoid canvas drawing overhead
     if (time - lastUpdate > 0.5) {
       lastUpdate = time;
+      
+      // Update sun physics
+      if (sceneManager.lightingManager.isRealtimeSunEnabled) {
+        sceneManager.lightingManager.updateRealtimeSun(hvacStore.currentSimHour, 12.9184, 79.1325);
+      }
+      
       if (floorplan.commandGlass) {
         floorplan.commandGlass.updateData(hvacStore.getCommandData());
       }

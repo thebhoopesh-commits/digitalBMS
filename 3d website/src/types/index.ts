@@ -38,6 +38,8 @@ export interface ILightingManager {
   setShadowsEnabled(enabled: boolean): void;
   update(delta: number): void;
   dispose?(): void;
+  updateRealtimeSun(simHour: number, lat: number, lon: number): void;
+  isRealtimeSunEnabled: boolean;
 }
 
 export interface IPerformanceMetrics {

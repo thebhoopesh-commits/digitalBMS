@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as SunCalc from 'suncalc';
 import { ILightingManager, LightingPresetName, ILightingPreset } from '../types';
 
 export const LIGHTING_PRESETS: Record<LightingPresetName, ILightingPreset> = {
@@ -141,7 +142,10 @@ export class LightingManager implements ILightingManager {
     this.scene.background = new THREE.Color(0xdbeafe);
   }
 
+  public isRealtimeSunEnabled: boolean = true;
+
   public setPreset(preset: LightingPresetName, duration = 1.0): void {
+    this.isRealtimeSunEnabled = false; // Disable realtime sun if manually selecting a preset
     if (!LIGHTING_PRESETS[preset]) return;
 
     if (duration <= 0) {
@@ -273,6 +277,54 @@ export class LightingManager implements ILightingManager {
 
     if (progress >= 1.0) {
       this.isTransitioning = false;
+    }
+  }
+
+
+  public updateRealtimeSun(simHour: number, lat: number, lon: number): void {
+    this.isTransitioning = false; // Disable preset transitions
+    
+    const now = new Date();
+    const hour = Math.floor(simHour);
+    const min = Math.floor((simHour - hour) * 60);
+    now.setHours(hour, min, 0, 0);
+
+    const pos = SunCalc.getPosition(now, lat, lon);
+    const altitude = pos.altitude;
+    const azimuth = pos.azimuth;
+
+    // Radius for the light source
+    const r = 50.0;
+    // Map SunCalc spherical to Three.js Cartesian (Y is up)
+    const y = Math.sin(altitude) * r;
+    const x = Math.cos(altitude) * Math.sin(azimuth) * r;
+    const z = Math.cos(altitude) * Math.cos(azimuth) * r;
+    
+    this.sunLight.position.set(x, y, z);
+    
+    // Adjust visual intensity & color based on altitude
+    if (altitude > 0) {
+      // Day
+      this.sunLight.intensity = Math.max(0.1, Math.min(2.0, altitude * 3.0));
+      if (altitude < 0.2) {
+        this.sunLight.color.setHex(0xff6a22); // Sunset golden
+        this.hemiLight.color.setHex(0x7c2d12);
+      } else {
+        this.sunLight.color.setHex(0xfff6e5); // Bright day
+        this.hemiLight.color.setHex(0xe2e8f0);
+      }
+    } else {
+      // Night
+      this.sunLight.intensity = 0.0;
+      this.sunLight.color.setHex(0x3b82f6);
+      this.hemiLight.color.setHex(0x0a0a2a);
+    }
+
+    // Update sky shader
+    const sky = this.scene.children.find(c => (c as any).material?.uniforms?.turbidity);
+    if (sky) {
+      const uniforms = (sky as any).material.uniforms;
+      uniforms['sunPosition'].value.copy(this.sunLight.position);
     }
   }
 
