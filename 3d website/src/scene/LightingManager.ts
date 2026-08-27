@@ -281,6 +281,7 @@ export class LightingManager implements ILightingManager {
   }
 
 
+
   public updateRealtimeSun(simHour: number, lat: number, lon: number): void {
     this.isTransitioning = false; // Disable preset transitions
     
@@ -291,7 +292,10 @@ export class LightingManager implements ILightingManager {
 
     const pos = SunCalc.getPosition(now, lat, lon);
     const altitude = pos.altitude;
-    const azimuth = pos.azimuth;
+    
+    // Offset the azimuth by 180 degrees (Math.PI) so that the Southern sun path 
+    // shines directly into the North-facing window curtain walls of our 3D office!
+    const azimuth = pos.azimuth + Math.PI;
 
     // Radius for the light source
     const r = 50.0;
@@ -305,19 +309,35 @@ export class LightingManager implements ILightingManager {
     // Adjust visual intensity & color based on altitude
     if (altitude > 0) {
       // Day
-      this.sunLight.intensity = Math.max(0.1, Math.min(2.0, altitude * 3.0));
+      this.sunLight.intensity = Math.max(0.1, Math.min(2.5, altitude * 4.0)); // Brighter sun
+      this.ambientLight.intensity = 0.25; // Brighter ambient fill during day
+      this.ceilingLights.forEach(pl => {
+         pl.intensity = 0.2; // Dim indoor lights, saving energy!
+         pl.color.setHex(0xfff4e6);
+      });
+
       if (altitude < 0.2) {
         this.sunLight.color.setHex(0xff6a22); // Sunset golden
         this.hemiLight.color.setHex(0x7c2d12);
+        this.hemiLight.intensity = 0.45;
       } else {
         this.sunLight.color.setHex(0xfff6e5); // Bright day
         this.hemiLight.color.setHex(0xe2e8f0);
+        this.hemiLight.intensity = 0.75;
       }
     } else {
       // Night
       this.sunLight.intensity = 0.0;
       this.sunLight.color.setHex(0x3b82f6);
+      
       this.hemiLight.color.setHex(0x0a0a2a);
+      this.hemiLight.intensity = 0.1;
+      
+      this.ambientLight.intensity = 0.05; // Darker ambient
+      this.ceilingLights.forEach(pl => {
+         pl.intensity = 0.85; // Bright indoor lights at night!
+         pl.color.setHex(0xffedcc); // Warmer indoor night light
+      });
     }
 
     // Update sky shader
