@@ -1060,7 +1060,11 @@
             <span class="btn-icon">🔄</span>
             <span class="btn-text">Orbit View [V]</span>
           </button>
-          <button id="btn-settings" class="toolbar-btn" title="Open Settings Drawer [O]">
+          <button id="btn-time-sim" class="toolbar-btn" title="Timing Simulation [T]">
+              <span class="btn-icon">??</span>
+              <span class="btn-text">Time Sim [T]</span>
+            </button>
+            <button id="btn-settings" class="toolbar-btn" title="Open Settings Drawer [O]">
             <span class="btn-icon">⚙️</span>
             <span class="btn-text">Settings</span>
           </button>
@@ -1148,6 +1152,31 @@
         </div>
       </aside>
 
+      <!-- Timing Simulation Drawer -->
+      <div id="time-drawer" class="chat-drawer hidden" style="left: 16px; right: auto; top: 100px; width: 340px; height: auto; min-height: 0; min-width: 0; resize: none;">
+        <div class="drawer-header" style="margin-bottom: 20px;">
+          <h3>Timing Simulation</h3>
+          <button id="btn-close-time" class="icon-btn" title="Close Time Sim">?</button>
+        </div>
+        
+        <label class="setting-label" style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+          <span>Sun Physics Override</span>
+          <span id="time-override-label" style="color: #60a5fa; font-family: monospace; font-size: 14px; font-weight: bold;">Sim Time</span>
+        </label>
+        
+        <input type="range" id="time-slider" min="0" max="23.99" step="0.25" value="12" style="width: 100%; accent-color: #38bdf8;">
+        
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-top: 8px; font-weight: 500;">
+          <span>00:00</span>
+          <span>12:00</span>
+          <span>23:59</span>
+        </div>
+        
+        <button id="btn-reset-time" class="toolbar-btn" style="width: 100%; justify-content: center; margin-top: 24px; padding: 12px; font-size: 13px;">
+          Reset to Live Simulation Time
+        </button>
+      </div>
+      
       <!-- Slide-Out Settings Drawer -->
       <div id="settings-drawer" class="settings-drawer hidden">
         <div class="drawer-header">
@@ -1164,19 +1193,7 @@
             </div>
           </div>
           
-          <div class="setting-group" style="margin-top: 20px;">
-            <label class="setting-label" style="display: flex; justify-content: space-between;">
-              <span>Manual Time Override</span>
-              <span id="time-override-label" style="color: #60a5fa; font-family: monospace;">Sim Time</span>
-            </label>
-            <input type="range" id="time-slider" min="0" max="23.99" step="0.25" value="12" style="width: 100%; margin-top: 8px;">
-            <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-top: 6px;">
-              <span>12 AM</span>
-              <span>12 PM</span>
-              <span>11:59 PM</span>
-            </div>
-            <button id="btn-reset-time" class="toolbar-btn" style="width: 100%; justify-content: center; margin-top: 12px;">Reset to Sim Time</button>
-          </div>
+          
         </div>
       </div>
 

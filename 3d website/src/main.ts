@@ -171,7 +171,16 @@ async function bootstrap() {
   };
 
   // 12. Modal and Drawer Toggles
+
+  const toggleTimeDrawer = () => {
+    const drawer = document.getElementById('time-drawer');
+    if (drawer) {
+      drawer.classList.toggle('hidden');
+    }
+  };
+
   const toggleSettingsDrawer = () => {
+
     const drawer = document.getElementById('settings-drawer');
     if (drawer) {
       drawer.classList.toggle('hidden');
@@ -336,7 +345,13 @@ async function bootstrap() {
       case 'V':
         toggleViewMode();
         break;
+
+      case 't':
+      case 'T':
+        toggleTimeDrawer();
+        break;
       case 'o':
+
       case 'O':
         toggleSettingsDrawer();
         break;
@@ -399,7 +414,11 @@ async function bootstrap() {
   });
 
   document.getElementById('btn-mode-toggle')?.addEventListener('click', toggleViewMode);
+
+  document.getElementById('btn-time-sim')?.addEventListener('click', toggleTimeDrawer);
+  document.getElementById('btn-close-time')?.addEventListener('click', toggleTimeDrawer);
   document.getElementById('btn-settings')?.addEventListener('click', toggleSettingsDrawer);
+
   document.getElementById('btn-activity')?.addEventListener('click', toggleActivityDrawer);
   document.getElementById('btn-close-activity')?.addEventListener('click', toggleActivityDrawer);
   document.getElementById('btn-chat')?.addEventListener('click', () => {
