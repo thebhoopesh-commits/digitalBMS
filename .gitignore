@@ -15,6 +15,7 @@ task.md
 !README.md
 !architecture.md
 !hardware_architecture.md
+!docs/*.md
 
 # Test artefacts
 test_report*.json
