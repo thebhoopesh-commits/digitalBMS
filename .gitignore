@@ -10,9 +10,10 @@ task.md
 *.pptx
 ~$*.pptx
 
-# All markdown docs except the public README
+# All markdown docs except the public README & architecture
 *.md
 !README.md
+!architecture.md
 
 # Test artefacts
 test_report*.json
