@@ -250,24 +250,36 @@ def translate_complaint(
             }
             
             intent = sensation_map.get(local_res.event.sensation.lower(), ComfortIntent.UNKNOWN)
-            zone_id = local_res.event.location or "open_office"
+            
+            raw_zone = local_res.event.location or "open_office"
+            from src.nlp.schemas import ALLOWED_ZONE_IDS, ZONE_ALIAS_MAP
+            zone_id = "open_office"
+            norm_zone = str(raw_zone).strip().lower().replace("-", "_").replace(" ", "_")
+            canonical_zone = ZONE_ALIAS_MAP.get(norm_zone, norm_zone)
+            if canonical_zone in ALLOWED_ZONE_IDS:
+                zone_id = canonical_zone
+
             severity = SeverityLevel.MEDIUM
             if local_res.event.intensity >= 4:
                 severity = SeverityLevel.HIGH
             elif local_res.event.intensity <= 2:
                 severity = SeverityLevel.LOW
 
-            mapped_event = SemanticComfortEvent(
-                event_id=local_res.event.event_id,
-                zone_id=zone_id,
-                intent=intent,
-                suspected_cause=SuspectedCause.UNSPECIFIED,
-                severity=severity,
-                confidence=local_res.event.confidence,
-                duration_minutes=60,
-                source="Ollama",
-                reasoning=f"Mapped from local backend. Sensation: {local_res.event.sensation}"
-            )
+            try:
+                mapped_event = SemanticComfortEvent(
+                    event_id=local_res.event.event_id,
+                    zone_id=zone_id,
+                    intent=intent,
+                    suspected_cause=SuspectedCause.UNSPECIFIED,
+                    severity=severity,
+                    confidence=local_res.event.confidence,
+                    duration_minutes=60,
+                    source="Ollama",
+                    reasoning=f"Mapped from local backend. Sensation: {local_res.event.sensation}"
+                )
+            except Exception as e:
+                logger.error(f"SemanticComfortEvent mapping validation failed: {e}")
+                return DeterministicFallbackParser.parse(text, timestamp=timestamp)
             
             return SemanticTranslationResult(
                 raw_query=text,
