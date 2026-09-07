@@ -221,10 +221,13 @@ def translate_complaint(
         logger.info(f"Routing request to LocalTranslator at {ollama_url}")
         from src.nlp.local_translator import LocalTranslator
         ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+        ollama_timeout = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "180.0"))
+        
         local_t = LocalTranslator(
             backend_type="ollama", 
             ollama_url=ollama_url, 
-            model_name=ollama_model
+            model_name=ollama_model,
+            timeout=ollama_timeout
         )
         
         # LocalTranslator parses into its own `TranslationResult`
