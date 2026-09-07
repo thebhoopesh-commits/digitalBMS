@@ -214,6 +214,69 @@ def translate_complaint(
     timeout, or schema validation failure.
     """
     timestamp = current_time if current_time is not None else 0.0
+
+    # 1. Check if Local Ollama is configured
+    ollama_url = os.environ.get("OLLAMA_URL")
+    if ollama_url:
+        logger.info(f"Routing request to LocalTranslator at {ollama_url}")
+        from src.nlp.local_translator import LocalTranslator
+        ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+        local_t = LocalTranslator(
+            backend_type="ollama", 
+            ollama_url=ollama_url, 
+            model_name=ollama_model
+        )
+        
+        # LocalTranslator parses into its own `TranslationResult`
+        local_res = local_t.translate(text)
+        
+        if local_res.success and local_res.event:
+            # Map Local ComfortEvent to SemanticTranslationResult
+            from src.nlp.schemas import ComfortEvent as SemanticComfortEvent
+            from src.nlp.schemas import ComfortIntent, SuspectedCause, SeverityLevel
+
+            sensation_map = {
+                "too_cold": ComfortIntent.TOO_COLD,
+                "too_warm": ComfortIntent.TOO_WARM,
+                "too_humid": ComfortIntent.TOO_HUMID,
+                "too_dry": ComfortIntent.TOO_DRY,
+                "stuffy": ComfortIntent.STUFFY,
+                "drafty": ComfortIntent.DRAFTY,
+                "glare": ComfortIntent.UNKNOWN,
+                "other": ComfortIntent.UNKNOWN
+            }
+            
+            intent = sensation_map.get(local_res.event.sensation.lower(), ComfortIntent.UNKNOWN)
+            zone_id = local_res.event.location or "open_office"
+            severity = SeverityLevel.MEDIUM
+            if local_res.event.intensity >= 4:
+                severity = SeverityLevel.HIGH
+            elif local_res.event.intensity <= 2:
+                severity = SeverityLevel.LOW
+
+            mapped_event = SemanticComfortEvent(
+                event_id=local_res.event.event_id,
+                zone_id=zone_id,
+                intent=intent,
+                suspected_cause=SuspectedCause.UNSPECIFIED,
+                severity=severity,
+                confidence=local_res.event.confidence,
+                duration_minutes=60,
+                source="Ollama",
+                reasoning=f"Mapped from local backend. Sensation: {local_res.event.sensation}"
+            )
+            
+            return SemanticTranslationResult(
+                raw_query=text,
+                is_applicable=(local_res.event.domain.lower() == "thermal"),
+                response_text="Processed feedback based on local edge AI translation.",
+                events=[mapped_event],
+                timestamp=timestamp
+            )
+        else:
+            logger.warning(f"LocalTranslator failed: {local_res.error_message}. Falling back.")
+
+    # 2. Fall back to Cloud LLM or Deterministic logic
     key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
     if not key or not key.strip():
