@@ -203,19 +203,41 @@ export class ChatManager {
         throw new Error(`HTTP Error: ${response.status}`);
       }
 
-      const data = await response.json();
-
       this.removeTypingBubble();
-      const assistantMsg = this.appendMessage('assistant', data.response_text);
+      const assistantMsg = this.appendMessage('assistant', '');
+      let fullText = '';
 
-      // Show HVAC applied badge if action was taken
-      if (data.applied && data.translation?.events?.length > 0) {
-        this.appendHVACBadge(assistantMsg, data.translation.events);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.chunk) {
+                  fullText += data.chunk;
+                  assistantMsg.textContent = fullText;
+                }
+                if (data.applied !== undefined) {
+                  if (data.applied && data.translation?.events?.length > 0) {
+                    this.appendHVACBadge(assistantMsg, data.translation.events);
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        }
       }
 
       // Keep last 5 exchanges in history
       this.history.push({ role: 'user', content: message });
-      this.history.push({ role: 'assistant', content: data.response_text });
+      this.history.push({ role: 'assistant', content: fullText });
       if (this.history.length > 10) {
         this.history = this.history.slice(this.history.length - 10);
       }

@@ -79,21 +79,65 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: msg, history: chatHistoryContext })
             });
-            const data = await res.json();
             
-            let replyText = "Message received, but no actionable constraints were identified.";
-            if (data.response_text) {
-                replyText = data.response_text;
-                appendChat(replyText, data.is_applicable && data.applied ? "bot" : "system");
-            } else if (data.is_applicable && data.applied) {
-                replyText = `Adjusted setpoints based on: "${msg}"`;
-                appendChat(replyText, "bot");
-            } else {
-                appendChat(replyText, "system");
+            if (!res.ok) {
+                appendChat("Error communicating with NLP engine.", "system");
+                return;
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            
+            const botMsgDiv = document.createElement("div");
+            botMsgDiv.className = "chat-msg chat-bot";
+            chatHistory.appendChild(botMsgDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+
+            let fullText = "";
+            let finalData = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.chunk) {
+                                fullText += data.chunk;
+                                botMsgDiv.textContent = fullText;
+                            }
+                            if (data.applied !== undefined) {
+                                finalData = data;
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+
+            if (finalData) {
+                if (!fullText) {
+                    let replyText = "Message received, but no actionable constraints were identified.";
+                    if (finalData.translation && finalData.translation.response_text) {
+                        replyText = finalData.translation.response_text;
+                    } else if (finalData.is_applicable && finalData.applied) {
+                        replyText = `Adjusted setpoints based on: "${msg}"`;
+                    }
+                    botMsgDiv.textContent = replyText;
+                    fullText = replyText;
+                }
+                
+                if (!finalData.is_applicable || !finalData.applied) {
+                    botMsgDiv.className = "chat-msg chat-system";
+                }
             }
 
             // Save bot reply to dialogue history
-            chatHistoryContext.push({ role: "assistant", content: replyText });
+            chatHistoryContext.push({ role: "assistant", content: fullText });
             if (chatHistoryContext.length > 5) chatHistoryContext.shift();
 
         } catch (err) {

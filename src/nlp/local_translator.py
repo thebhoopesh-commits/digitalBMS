@@ -383,22 +383,11 @@ class TranslationResult(BaseModel):
 # 2. PROMPT ENGINEERING & CONSTRAINED DECODING GRAMMARS
 # ============================================================================
 
-SYSTEM_PROMPT = """You are an expert Building Management System (BMS) telemetry extraction AI.
-Analyze natural language occupant feedback and extract structured comfort telemetry in strict JSON format.
-
-Allowed values:
-- domain: "thermal", "visual", "acoustic", "air_quality", "ergonomic", "other"
-- sensation: "too_cold", "too_hot", "drafty", "stuffy", "too_bright", "too_dim", "glare", "flickering", "noisy", "loud_hum", "bad_odor", "dusty", "uncomfortable", "other"
-- location: exact room, zone, desk string (e.g. "Room 204", "Zone 3B", "Desk 14") or null if unspecified
-- intensity: integer from 1 (mild/noticeable) to 5 (extreme/urgent)
-- action_requested: "increase_temperature", "decrease_temperature", "increase_fan", "decrease_fan", "turn_on_lights", "dim_lights", "open_blinds", "close_blinds", "ventilate", "reduce_noise", "adjust_workstation", "investigate", "none"
-- confidence: float between 0.0 and 1.0
-
-Rules:
-1. Output ONLY a single valid JSON object.
-2. Do NOT wrap output in markdown fences (no ```json).
-3. Do NOT include conversational filler, greetings, or explanations.
-"""
+SYSTEM_PROMPT = """Short friendly reply then JSON.
+Format:
+Response: <reply>
+JSON: <json>
+Fields: domain(thermal,visual,acoustic,air_quality,ergonomic,other), sensation, location(str/null), intensity(1-5), action_requested, confidence(0.0-1.0)"""
 
 FEW_SHOT_EXAMPLES = [
     {
@@ -410,50 +399,6 @@ FEW_SHOT_EXAMPLES = [
             "intensity": 4,
             "action_requested": "increase_temperature",
             "confidence": 0.95
-        })
-    },
-    {
-        "input": "Blinding glare on my monitor in Zone B.",
-        "output": json.dumps({
-            "domain": "visual",
-            "sensation": "glare",
-            "location": "Zone B",
-            "intensity": 4,
-            "action_requested": "close_blinds",
-            "confidence": 0.92
-        })
-    },
-    {
-        "input": "The HVAC unit in conference room 3 is making an unbearable rattling noise.",
-        "output": json.dumps({
-            "domain": "acoustic",
-            "sensation": "loud_hum",
-            "location": "conference room 3",
-            "intensity": 5,
-            "action_requested": "investigate",
-            "confidence": 0.94
-        })
-    },
-    {
-        "input": "The air feels super stuffy and stale over here by desk 12.",
-        "output": json.dumps({
-            "domain": "air_quality",
-            "sensation": "stuffy",
-            "location": "desk 12",
-            "intensity": 3,
-            "action_requested": "ventilate",
-            "confidence": 0.90
-        })
-    },
-    {
-        "input": "My desk chair height won't lock and my back is killing me.",
-        "output": json.dumps({
-            "domain": "ergonomic",
-            "sensation": "uncomfortable",
-            "location": None,
-            "intensity": 4,
-            "action_requested": "adjust_workstation",
-            "confidence": 0.88
         })
     }
 ]
@@ -690,15 +635,49 @@ class OllamaBackend(BaseInferenceBackend):
                 content = message.get("content", "")
                 if content:
                     return content.strip()
-                # Fallback check for generate endpoint schema
                 return resp_data.get("response", "").strip()
         except urllib.error.HTTPError as e:
-            # If /api/chat is not supported on older Ollama, fallback to /api/generate
             if e.code == 404:
                 return self._fallback_generate_api(prompt, **kwargs)
             raise RuntimeError(f"Ollama HTTP error {e.code}: {e.reason}")
         except urllib.error.URLError as e:
             raise RuntimeError(f"Ollama connection failed: {e.reason}")
+
+    def generate_stream(self, prompt: str, grammar: Optional[str] = None, **kwargs: Any):
+        """Stream chat completion from Ollama daemon."""
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": True,
+            "options": {
+                "temperature": kwargs.get("temperature", 0.1),
+                "num_predict": kwargs.get("max_tokens", 256),
+                "num_thread": kwargs.get("num_threads", 4),
+                **self.extra_options
+            }
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}/api/chat",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                for line in resp:
+                    if line:
+                        chunk_data = json.loads(line.decode("utf-8"))
+                        msg = chunk_data.get("message", {})
+                        chunk_content = msg.get("content", "")
+                        if chunk_content:
+                            yield chunk_content
+        except Exception as e:
+            logger.error(f"Ollama streaming failed: {e}")
+            yield ""
 
     def _fallback_generate_api(self, prompt: str, **kwargs: Any) -> str:
         """Fallback querying /api/generate for older Ollama versions."""
@@ -1295,7 +1274,7 @@ class LocalTranslator:
         try:
             raw_response = self.backend.generate(
                 prompt=prompt,
-                grammar=GBNF_COMFORT_EVENT_GRAMMAR
+                grammar=None
             )
         except Exception as e:
             logger.warning("Backend generation error: %s; initiating heuristic fallback", e)

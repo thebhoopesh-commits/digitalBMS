@@ -156,21 +156,146 @@ def _coordinator(request: Request) -> SimulationCoordinator:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: Request, body: ChatRequest) -> ChatResponse:
-    """Translates a natural-language message and injects any constraints."""
+@router.post("/chat")
+async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingResponse:
+    """Translates a natural-language message and streams the response text, then injects constraints."""
     coord = _coordinator(request)
     if not coord.is_initialized():
         coord.initialize()
 
-    translation, applied = await _submit_chat(coord, body.message, body.history)
-    return ChatResponse(
-        translation=translation.model_dump(),
-        applied=bool(applied),
-        is_applicable=bool(translation.is_applicable),
-        response_text=translation.response_text,
-    )
+    import asyncio
+    import os
+    import json
+    
+    async def sse_generator():
+        # Only streaming if local Ollama is configured
+        ollama_url = os.environ.get("OLLAMA_URL")
+        if ollama_url:
+            from src.nlp.local_translator import LocalTranslator, build_full_prompt
+            ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+            ollama_timeout = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "180.0"))
+            
+            local_t = LocalTranslator(
+                backend_type="ollama", 
+                ollama_url=ollama_url, 
+                model_name=ollama_model,
+                timeout=ollama_timeout
+            )
+            
+            prompt = build_full_prompt(body.message)
+            full_text = ""
+            ui_text_sent = False
+            is_json_part = False
+            
+            # Stream the conversational response
+            for chunk in local_t.backend.generate_stream(prompt=prompt, grammar=None):
+                full_text += chunk
+                
+                # Check if we hit the JSON block
+                if "JSON:" in full_text or "{" in full_text:
+                    if not is_json_part:
+                        is_json_part = True
+                        # Send whatever text was before the JSON marker just in case
+                        idx = full_text.find("JSON:")
+                        if idx == -1: idx = full_text.find("{")
+                        if idx > 0:
+                            clean_text = full_text[:idx].replace("Response:", "").strip()
+                            if clean_text and not ui_text_sent:
+                                yield f"data: {json.dumps({'chunk': clean_text})}\n\n"
+                                ui_text_sent = True
+                else:
+                    # Filter out the "Response:" prefix
+                    clean_chunk = chunk
+                    if "Response:" in full_text and not ui_text_sent:
+                        clean_chunk = full_text.replace("Response:", "").lstrip()
+                        ui_text_sent = True
+                        yield f"data: {json.dumps({'chunk': clean_chunk})}\n\n"
+                    elif ui_text_sent and not is_json_part:
+                        yield f"data: {json.dumps({'chunk': clean_chunk})}\n\n"
+                
+                await asyncio.sleep(0)
+            
+            # Now parse the full_text for JSON
+            res = local_t.parse_raw_output(full_text, original_text=body.message)
+            
+            # Create a mock TranslationResult to map
+            from src.nlp.local_translator import TranslationResult
+            local_res = TranslationResult(
+                success=True,
+                event=res,
+                error_message=None,
+                raw_response=full_text,
+                backend_used="ollama",
+                execution_time_ms=0.0
+            )
+            
+            # Map it using same logic from translator.py
+            from src.nlp.schemas import ComfortEvent as SemanticComfortEvent
+            from src.nlp.schemas import ComfortIntent, SuspectedCause, SeverityLevel, SemanticTranslationResult
+            from src.nlp.schemas import ALLOWED_ZONE_IDS, ZONE_ALIAS_MAP
+            
+            sensation_map = {
+                "too_cold": ComfortIntent.TOO_COLD,
+                "too_warm": ComfortIntent.TOO_WARM,
+                "too_humid": ComfortIntent.TOO_HUMID,
+                "too_dry": ComfortIntent.TOO_DRY,
+                "stuffy": ComfortIntent.STUFFY,
+                "drafty": ComfortIntent.DRAFTY,
+                "glare": ComfortIntent.UNKNOWN,
+                "other": ComfortIntent.UNKNOWN
+            }
+            intent = sensation_map.get(res.sensation.lower(), ComfortIntent.UNKNOWN)
+            raw_zone = res.location or "open_office"
+            norm_zone = str(raw_zone).strip().lower().replace("-", "_").replace(" ", "_")
+            zone_id = ZONE_ALIAS_MAP.get(norm_zone, norm_zone)
+            if zone_id not in ALLOWED_ZONE_IDS:
+                zone_id = "open_office"
 
+            severity = SeverityLevel.MEDIUM
+            if res.intensity >= 4:
+                severity = SeverityLevel.HIGH
+            elif res.intensity <= 2:
+                severity = SeverityLevel.LOW
+
+            mapped_event = SemanticComfortEvent(
+                event_id=res.event_id,
+                zone_id=zone_id,
+                intent=intent,
+                suspected_cause=SuspectedCause.UNSPECIFIED,
+                severity=severity,
+                confidence=res.confidence,
+                duration_minutes=60,
+                source="Ollama",
+                reasoning=f"Mapped from local backend. Sensation: {res.sensation}"
+            )
+            
+            # Get the response text part from full_text
+            import re
+            resp_match = re.search(r"Response:\s*(.*?)(?:\nJSON:|$)", full_text, re.DOTALL)
+            friendly_response = resp_match.group(1).strip() if resp_match else "I have updated the system with your feedback."
+            
+            final_translation = SemanticTranslationResult(
+                raw_query=body.message,
+                is_applicable=(res.domain.lower() == "thermal"),
+                response_text=friendly_response,
+                events=[mapped_event],
+                timestamp=0.0
+            )
+            
+            # Inject into simulator
+            applied = False
+            if final_translation.is_applicable and final_translation.events:
+                applied = await asyncio.to_thread(coord.inject_semantic_event, final_translation.events[0])
+            
+            # Yield the final payload
+            yield f"data: {json.dumps({'applied': bool(applied), 'is_applicable': final_translation.is_applicable, 'translation': final_translation.model_dump()})}\n\n"
+        else:
+            # Fallback to sync for cloud LLM
+            translation, applied = await _submit_chat(coord, body.message, body.history)
+            yield f"data: {json.dumps({'chunk': translation.response_text})}\n\n"
+            yield f"data: {json.dumps({'applied': bool(applied), 'is_applicable': bool(translation.is_applicable), 'translation': translation.model_dump()})}\n\n"
+
+    return StreamingResponse(sse_generator(), media_type="text/event-stream")
 
 async def _submit_chat(coord: SimulationCoordinator, message: str, history: List[Dict[str, str]]):
     """Offload the synchronous NLP pipeline to a thread so the loop stays non-blocking."""
