@@ -281,10 +281,20 @@ def translate_complaint(
                 logger.error(f"SemanticComfortEvent mapping validation failed: {e}")
                 return DeterministicFallbackParser.parse(text, timestamp=timestamp)
             
+            friendly_response = "I have updated the system with your feedback."
+            if intent == ComfortIntent.TOO_COLD:
+                friendly_response = f"Got it. I'm increasing the heating in the {zone_id.replace('_', ' ')}."
+            elif intent == ComfortIntent.TOO_WARM:
+                friendly_response = f"Noted. I'm increasing the cooling in the {zone_id.replace('_', ' ')}."
+            elif intent == ComfortIntent.TOO_HUMID or intent == ComfortIntent.STUFFY:
+                friendly_response = f"Understood. I'm increasing ventilation in the {zone_id.replace('_', ' ')}."
+            elif intent == ComfortIntent.DRAFTY:
+                friendly_response = f"I'll adjust the airflow in the {zone_id.replace('_', ' ')} to reduce drafts."
+
             return SemanticTranslationResult(
                 raw_query=text,
                 is_applicable=(local_res.event.domain.lower() == "thermal"),
-                response_text="Processed feedback based on local edge AI translation.",
+                response_text=friendly_response,
                 events=[mapped_event],
                 timestamp=timestamp
             )
