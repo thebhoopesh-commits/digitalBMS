@@ -174,12 +174,29 @@ export class ChatManager {
         ? 'AI is thinking...'
         : 'Type a complaint... (e.g. Too cold in lobby)';
     }
+    if (processing) {
+      document.dispatchEvent(new CustomEvent('mascot-set-state', { detail: { state: 'luma_reaction_focused.glb', duration: 10.0 } }));
+    }
   }
 
   public async sendMessage(message: string): Promise<void> {
     this.appendMessage('user', message);
     this.setProcessingState(true);
     this.showTypingBubble();
+
+    // Mascot Immediate Acknowledgment Logic
+    const lowerMsg = message.toLowerCase();
+    let reaction = 'luma_reaction_focused.glb';
+
+    if (lowerMsg.includes('comfortable') || lowerMsg.includes('thanks') || lowerMsg.includes('good') || lowerMsg.includes('great') || lowerMsg.includes('better')) {
+        reaction = 'luma_reaction_happy.glb';
+    } else if (lowerMsg.includes('cold') || lowerMsg.includes('hot') || lowerMsg.includes('warm') || lowerMsg.includes('stuffy') || lowerMsg.includes('air') || lowerMsg.includes('bad') || lowerMsg.includes('problem') || lowerMsg.includes('wrong')) {
+        reaction = 'luma_reaction_worried.glb';
+    } else if (lowerMsg.includes('?')) {
+        reaction = 'luma_reaction_curious.glb';
+    }
+
+    document.dispatchEvent(new CustomEvent('mascot-set-state', { detail: { state: reaction, duration: 10.0 } }));
 
     let backendMessage = message;
 
@@ -227,6 +244,7 @@ export class ChatManager {
                 if (data.applied !== undefined) {
                   if (data.applied && data.translation?.events?.length > 0) {
                     this.appendHVACBadge(assistantMsg, data.translation.events);
+                    document.dispatchEvent(new CustomEvent('nlp-complaint-applied', { detail: data.translation.events[0] }));
                   }
                 }
               } catch (e) {}

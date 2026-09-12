@@ -1,0 +1,93 @@
+[
+  {
+    "key": "happy",
+    "label": "Happy",
+    "file": "luma_reaction_happy.glb",
+    "bytes": 172888,
+    "geometry_count": 26
+  },
+  {
+    "key": "curious",
+    "label": "Curious",
+    "file": "luma_reaction_curious.glb",
+    "bytes": 172900,
+    "geometry_count": 26
+  },
+  {
+    "key": "comfortable",
+    "label": "Comfortable",
+    "file": "luma_reaction_comfortable.glb",
+    "bytes": 172900,
+    "geometry_count": 26
+  },
+  {
+    "key": "sleepy",
+    "label": "Sleepy",
+    "file": "luma_reaction_sleepy.glb",
+    "bytes": 172896,
+    "geometry_count": 26
+  },
+  {
+    "key": "worried",
+    "label": "Worried",
+    "file": "luma_reaction_worried.glb",
+    "bytes": 172872,
+    "geometry_count": 26
+  },
+  {
+    "key": "excited",
+    "label": "Excited",
+    "file": "luma_reaction_excited.glb",
+    "bytes": 172872,
+    "geometry_count": 26
+  },
+  {
+    "key": "alert",
+    "label": "Alert",
+    "file": "luma_reaction_alert.glb",
+    "bytes": 172864,
+    "geometry_count": 26
+  },
+  {
+    "key": "focused",
+    "label": "Focused",
+    "file": "luma_reaction_focused.glb",
+    "bytes": 172896,
+    "geometry_count": 26
+  },
+  {
+    "key": "temperature",
+    "label": "Temperature / Too Hot",
+    "file": "luma_reaction_temperature.glb",
+    "bytes": 172892,
+    "geometry_count": 26
+  },
+  {
+    "key": "occupancy",
+    "label": "Occupancy / Active",
+    "file": "luma_reaction_occupancy.glb",
+    "bytes": 172896,
+    "geometry_count": 26
+  },
+  {
+    "key": "energy",
+    "label": "Energy / Efficient",
+    "file": "luma_reaction_energy.glb",
+    "bytes": 172904,
+    "geometry_count": 26
+  },
+  {
+    "key": "air_quality",
+    "label": "Air Quality / Good",
+    "file": "luma_reaction_air_quality.glb",
+    "bytes": 172892,
+    "geometry_count": 26
+  },
+  {
+    "key": "activity",
+    "label": "Activity / Celebrating",
+    "file": "luma_reaction_activity.glb",
+    "bytes": 172888,
+    "geometry_count": 26
+  }
+]

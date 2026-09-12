@@ -10,6 +10,7 @@ import { ChatManager } from './interaction/ChatManager';
 import { Minimap } from './hud/Minimap';
 import { HVACDataStore } from './data/HVACDataStore';
 import { NPCManager } from './scene/NPCManager';
+import { MascotManager } from './scene/MascotManager';
 import { IOfficeDebug, LightingPresetName } from './types';
 
 let manualTimeOverride: number | null = null;
@@ -82,6 +83,7 @@ async function bootstrap() {
   let lastUpdate = 0;
   const hvacStore = new HVACDataStore();
   const npcManager = new NPCManager(sceneManager.scene, hvacStore);
+  const mascotManager = new MascotManager(sceneManager.scene, hvacStore);
 
   sceneManager.registerUpdateCallback((delta) => {
     time += delta;
@@ -91,6 +93,7 @@ async function bootstrap() {
     interactiveProps.update(delta);
     hvacStore.update(delta);
     npcManager.update(delta);
+    mascotManager.update(delta);
 
     // Update minimap with current player position and facing direction
     if (minimap) {
@@ -550,6 +553,13 @@ async function bootstrap() {
     setMode: (mode: string) => {
       if (mode === 'fps' || mode === 'orbit') {
         navigationManager.setMode(mode as any, false);
+        return true;
+      }
+      return false;
+    },
+    testMascotState: (state: string) => {
+      if ((window as any).testMascotState) {
+        (window as any).testMascotState(state);
         return true;
       }
       return false;

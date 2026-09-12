@@ -295,6 +295,7 @@ export interface IOfficeDebug {
   teleport(zone: string): boolean;
   setLighting(preset: string): boolean;
   setMode?(mode: string): boolean;
+  testMascotState?(state: string): boolean;
 }
 
 declare global {
