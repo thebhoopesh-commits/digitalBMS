@@ -184,35 +184,39 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             
             prompt = build_full_prompt(body.message)
             full_text = ""
-            ui_text_sent = False
             is_json_part = False
+            yielded_len = 0
             
             # Stream the conversational response
             for chunk in local_t.backend.generate_stream(prompt=prompt, grammar=None):
                 full_text += chunk
                 
-                # Check if we hit the JSON block
-                if "JSON:" in full_text or "{" in full_text:
-                    if not is_json_part:
+                if not is_json_part:
+                    idx = full_text.find("JSON:")
+                    if idx == -1: 
+                        idx = full_text.find("{")
+                        
+                    if idx != -1:
                         is_json_part = True
-                        # Send whatever text was before the JSON marker just in case
-                        idx = full_text.find("JSON:")
-                        if idx == -1: idx = full_text.find("{")
-                        if idx > 0:
-                            clean_text = full_text[:idx].replace("Response:", "").strip()
-                            if clean_text and not ui_text_sent:
-                                yield f"data: {json.dumps({'chunk': clean_text})}\n\n"
-                                ui_text_sent = True
-                else:
-                    # Filter out the "Response:" prefix
-                    clean_chunk = chunk
-                    if "Response:" in full_text and not ui_text_sent:
-                        clean_chunk = full_text.replace("Response:", "").lstrip()
-                        ui_text_sent = True
-                        yield f"data: {json.dumps({'chunk': clean_chunk})}\n\n"
-                    elif ui_text_sent and not is_json_part:
-                        yield f"data: {json.dumps({'chunk': clean_chunk})}\n\n"
-                
+                        unyielded = full_text[yielded_len:idx]
+                    else:
+                        unyielded = full_text[yielded_len:]
+                        
+                    if unyielded:
+                        # Buffer the first few characters if it looks like it might be typing "Response:"
+                        if yielded_len == 0 and len(full_text) < 10 and "Response:".startswith(full_text):
+                            continue
+                            
+                        # Strip "Response:" if it's at the start
+                        if yielded_len == 0 and full_text.startswith("Response:"):
+                            # This handles the case where the whole "Response:" is in the first batch
+                            unyielded = full_text[:len(full_text)].replace("Response:", "", 1).lstrip()
+                            
+                        if unyielded:
+                            yield f"data: {json.dumps({'chunk': unyielded})}\n\n"
+                            
+                        yielded_len = len(full_text) if not is_json_part else idx
+                        
                 await asyncio.sleep(0)
             
             # Now parse the full_text for JSON
