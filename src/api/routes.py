@@ -172,7 +172,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         ollama_url = os.environ.get("OLLAMA_URL")
         if ollama_url:
             from src.nlp.local_translator import LocalTranslator, build_full_prompt
-            ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+            ollama_model = os.environ.get("OLLAMA_MODEL", "qwen3:1.7b")
             ollama_timeout = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "180.0"))
             
             local_t = LocalTranslator(
