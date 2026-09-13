@@ -64,8 +64,9 @@ class SimulationCoordinator:
         self._subscribers: List["queue.Queue[Any]"] = []
 
         # LLM engine indicator (informational, surfaced via /api/status)
-        self._llm_api_key = llm_api_key
-        self._llm_engine_active: bool = bool(llm_api_key)
+        import os
+        self._llm_api_key = None
+        self._llm_engine_active: bool = bool(os.environ.get("OLLAMA_URL"))
 
 
     # ------------------------------------------------------------------ #
@@ -177,11 +178,11 @@ class SimulationCoordinator:
         # Layer 1 & 2: Preprocess text (Sanitize + Entity Resolution)
         processed_message = NLPPreprocessor.process(message)
 
-        # 1. NLP translation (dual-engine; falls back automatically).
+        # 1. NLP translation (local Ollama engine).
         translation = translate_complaint(
             text=processed_message,
             current_time=current_time_minutes,
-            api_key=self._llm_api_key,
+            api_key=None,
             live_building_state=live_state,
             outdoor_temp_c=outdoor_temp,
             history=history,
