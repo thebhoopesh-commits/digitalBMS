@@ -169,8 +169,61 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
     import os
     import json
     import re
-    
     async def generate_chat_events():
+        from src.nlp.schemas import (
+            ComfortEvent as SemanticComfortEvent,
+            ComfortIntent,
+            SuspectedCause,
+            SeverityLevel,
+            SemanticTranslationResult,
+            ALLOWED_ZONE_IDS,
+            ZONE_ALIAS_MAP,
+        )
+
+        # Fast path for common greetings
+        msg_clean = body.message.strip().lower()
+        if re.match(r"^(hi|hello|hey|good\s+morning|good\s+afternoon|good\s+evening|greetings)[\s!.]*$", msg_clean):
+            greeting_reply = "Hello! How can I assist you with building comfort today?"
+            yield f"data: {json.dumps({'chunk': greeting_reply})}\n\n"
+            final_translation = SemanticTranslationResult(
+                raw_query=body.message,
+                is_applicable=False,
+                response_text=greeting_reply,
+                events=[],
+                timestamp=0.0
+            )
+            yield f"data: {json.dumps({'applied': False, 'is_applicable': False, 'translation': final_translation.model_dump()})}\n\n"
+            return
+
+        # Fast path for live telemetry inquiries
+        if re.search(r"\b(what(?:'s| is) the (?:temp|temperature|humidity)|how hot|how cold|current temp)\b", msg_clean):
+            zone_states = coord.get_zone_states()
+            target_zone = "open_office"
+            if "lobby" in msg_clean:
+                target_zone = "lobby"
+            elif "conf" in msg_clean:
+                target_zone = "conference_room"
+            elif "office" in msg_clean:
+                target_zone = "open_office"
+            
+            z_data = zone_states.get(target_zone, {})
+            temp_val = z_data.get("temperature_c", 22.0)
+            target_val = z_data.get("target_setpoint_c", 22.0)
+            hum_val = z_data.get("humidity_pct", 50.0)
+            zone_name = target_zone.replace("_", " ").title()
+            
+            telemetry_reply = f"The current temperature in the {zone_name} is {temp_val:.1f}°C (target setpoint: {target_val:.1f}°C, humidity: {hum_val:.1f}%)."
+            yield f"data: {json.dumps({'chunk': telemetry_reply})}\n\n"
+            final_translation = SemanticTranslationResult(
+                raw_query=body.message,
+                is_applicable=False,
+                response_text=telemetry_reply,
+                events=[],
+                timestamp=0.0
+            )
+            yield f"data: {json.dumps({'applied': False, 'is_applicable': False, 'translation': final_translation.model_dump()})}\n\n"
+            return
+
         # Local Ollama is strictly required for AI inference
         ollama_url = os.environ.get("OLLAMA_URL")
         if not ollama_url:
@@ -231,11 +284,12 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                         if yielded_len == 0 and len(full_text.lstrip()) < 10 and "Response:".startswith(full_text.lstrip()):
                             continue
                             
-                        # Strip "Response:" if it's at the start
+                        # Strip "Response:" and any "/no_think" artifacts if at start
                         if yielded_len == 0:
                             resp_pfx = re.match(r"^\s*Response:\s*", unyielded)
                             if resp_pfx:
                                 unyielded = unyielded[resp_pfx.end():]
+                            unyielded = re.sub(r"^\s*/?no_think\s*", "", unyielded, flags=re.I)
                                 
                         # Strip any accidental trailing "JSON", "JSON:", or "Response:" from conversational unyielded text
                         unyielded = re.sub(r'(?:\s*(?:JSON\s*:?|Response:))+\s*$', '', unyielded)
@@ -261,6 +315,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                         resp_pfx = re.match(r"^\s*Response:\s*", unyielded)
                         if resp_pfx:
                             unyielded = unyielded[resp_pfx.end():]
+                        unyielded = re.sub(r"^\s*/?no_think\s*", "", unyielded, flags=re.I)
                     unyielded = re.sub(r'(?:\s*(?:JSON\s*:?|Response:))+\s*$', '', unyielded)
                     if unyielded:
                         yield f"data: {json.dumps({'chunk': unyielded})}\n\n"
@@ -288,10 +343,6 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         )
         
         # Map it using same logic from translator.py
-        from src.nlp.schemas import ComfortEvent as SemanticComfortEvent
-        from src.nlp.schemas import ComfortIntent, SuspectedCause, SeverityLevel, SemanticTranslationResult
-        from src.nlp.schemas import ALLOWED_ZONE_IDS, ZONE_ALIAS_MAP
-        
         sensation_map = {
             "too_hot": ComfortIntent.TOO_WARM,
             "hot": ComfortIntent.TOO_WARM,
@@ -356,7 +407,8 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         resp_match = re.search(r"Response:\s*(.*?)(?:\n\s*JSON\s*:?|\n\s*\{|\s*\{|$)", full_text, re.DOTALL)
         if resp_match and resp_match.group(1).strip():
             friendly_response = resp_match.group(1).strip()
-            # Clean any trailing "JSON" or "JSON:" from friendly_response
+            # Clean any /no_think artifact and trailing "JSON" or "JSON:" from friendly_response
+            friendly_response = re.sub(r'^\s*/?no_think\s*', '', friendly_response, flags=re.I).strip()
             friendly_response = re.sub(r'(?:\s*JSON\s*:?)+$', '', friendly_response).strip()
         else:
             friendly_response = ""
