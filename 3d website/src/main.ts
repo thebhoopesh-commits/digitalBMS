@@ -650,15 +650,34 @@ async function bootstrap() {
     navigationManager.collisionEngine.clearObstacles();
     envManager.getActiveScene().getObstacles().forEach(obs => navigationManager.addObstacle(obs.box, obs.name, obs.id, obs.isDoor));
     interactiveProps.floorplan = envManager.getActiveScene() as any;
+    
+    if (typeof navigationManager.setActiveZoneRegistry === 'function') {
+      navigationManager.setActiveZoneRegistry(envManager.getActiveScene().getZones());
+    }
+    
+    if (minimap) {
+      minimap.setEnvironment(envManager.getActiveScene().worldBounds, envManager.getActiveScene().minimapRooms);
+    }
+    
     navigationManager.teleportTo('lobby', true);
     document.getElementById('btn-env-corporate')?.classList.add('active');
     document.getElementById('btn-env-healthcare')?.classList.remove('active');
   });
+  
   document.getElementById('btn-env-healthcare')?.addEventListener('click', async () => {
     await envManager.switchEnvironment('healthcare');
     navigationManager.collisionEngine.clearObstacles();
     envManager.getActiveScene().getObstacles().forEach(obs => navigationManager.addObstacle(obs.box, obs.name, obs.id, obs.isDoor));
     interactiveProps.floorplan = envManager.getActiveScene() as any;
+    
+    if (typeof navigationManager.setActiveZoneRegistry === 'function') {
+      navigationManager.setActiveZoneRegistry(envManager.getActiveScene().getZones());
+    }
+    
+    if (minimap) {
+      minimap.setEnvironment(envManager.getActiveScene().worldBounds, envManager.getActiveScene().minimapRooms);
+    }
+    
     navigationManager.teleportTo('hospital_lobby', true);
     document.getElementById('btn-env-healthcare')?.classList.add('active');
     document.getElementById('btn-env-corporate')?.classList.remove('active');
