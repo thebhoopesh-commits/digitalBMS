@@ -97,9 +97,11 @@ export class InteractiveProps {
       this.registerGlassBoard(this.floorplan.commandGlass.glassMesh, 'Command Glass', 'Hero Operations Dashboard', this.floorplan.commandGlass.group);
     }
     
-    Object.keys(this.floorplan.glassBoards).forEach(zone => {
-      this.registerGlassBoard(this.floorplan.glassBoards[zone].glassMesh, `Zone ${zone.toUpperCase()} Glass`, `HVAC Telemetry Node`, this.floorplan.glassBoards[zone].group);
-    });
+    if (this.floorplan.glassBoards) {
+      Object.keys(this.floorplan.glassBoards).forEach(zone => {
+        this.registerGlassBoard(this.floorplan.glassBoards[zone].glassMesh, `Zone ${zone.toUpperCase()} Glass`, `HVAC Telemetry Node`, this.floorplan.glassBoards[zone].group);
+      });
+    }
   }
 
   private registerGlassBoard(interactMesh: THREE.Object3D, name: string, desc: string, targetMesh: THREE.Object3D): void {
