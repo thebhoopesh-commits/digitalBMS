@@ -593,6 +593,7 @@ class HVACGymEnv(gym.Env):
             cumulative_cost_saved_usd=float(self.cum_cost_saved_usd),
             baseline_comfort_violation_total=float(self.cum_base_comfort_viol),
             rl_comfort_violation_total=float(self.cum_rl_comfort_viol),
+            safety_shield_interventions=0,
             zone_ids=self.zone_ids,
             t_z_base=(tb0_new, tb1_new, tb2_new),
             t_sp_base=(22.0, 22.0, 22.0),

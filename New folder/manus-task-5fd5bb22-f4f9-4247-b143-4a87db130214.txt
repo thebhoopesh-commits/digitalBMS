@@ -1,0 +1,1 @@
+I’ll research the human-skin response to HVAC exposure over the first 30 minutes and translate the findings into concrete digital-BMS sensing, control, and validation requirements.

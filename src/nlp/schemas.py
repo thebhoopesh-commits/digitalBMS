@@ -11,12 +11,16 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# Canonical building zones for the 4-zone facility
+# Canonical building zones for the 4-zone facility and Healthcare environment
 ALLOWED_ZONE_IDS: Set[str] = {
     "lobby",
     "open_office",
     "conference_room",
     "server_room",
+    "hospital_lobby",
+    "clinical_areas",
+    "staff_areas",
+    "support_hvac",
 }
 
 # Alias mapping for normalizing occupant and LLM zone references to canonical zone identifiers
@@ -73,8 +77,20 @@ ZONE_ALIAS_MAP: Dict[str, str] = {
     "switch_room": "server_room",
     "equipment_room": "server_room",
     "servers": "server_room",
+    "hospital_lobby": "hospital_lobby",
+    "triage": "hospital_lobby",
+    "admitting": "hospital_lobby",
+    "clinical_areas": "clinical_areas",
+    "icu": "clinical_areas",
+    "ward": "clinical_areas",
+    "clinical": "clinical_areas",
+    "staff_areas": "staff_areas",
+    "nurse_station": "staff_areas",
+    "nurses": "staff_areas",
+    "support_hvac": "support_hvac",
+    "ahu": "support_hvac",
+    "plant": "support_hvac",
 }
-
 
 class ComfortIntent(str, Enum):
     """Primary environmental and thermal discomfort intents."""

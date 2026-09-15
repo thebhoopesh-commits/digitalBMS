@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operations View — BMS Pro</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand"><span class="brand-mark">▥</span><span>BMS Pro</span></div>
+      <nav>
+        <button class="nav-item active" data-nav="overview">▦ <span>Overview</span></button>
+        <button class="nav-item" data-nav="zones">▱ <span>Zones</span></button>
+        <button class="nav-item" data-nav="alerts">△ <span>Alerts</span><b class="nav-count">2</b></button>
+        <button class="nav-item" data-nav="trends">⌁ <span>Trends</span></button>
+        <button class="nav-item" data-nav="settings">⚙ <span>Settings</span></button>
+      </nav>
+      <div class="sidebar-footer">Facility operations<br><span>Operator console</span></div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div><p class="eyebrow">NORTH CAMPUS / BUILDING A</p><h1>Operations View</h1></div>
+        <div class="topbar-actions">
+          <span class="connection"><i></i> Live</span>
+          <label class="select-wrap"><span class="sr-only">Site</span><select id="siteSelect"><option>North Campus</option><option>South Campus</option></select></label>
+          <time id="clock">Apr 25, 2025&nbsp; 14:32</time>
+          <button class="avatar" aria-label="Open operator menu">JS</button>
+        </div>
+      </header>
+
+      <section class="kpi-grid" aria-label="Building summary">
+        <article class="kpi"><span class="kpi-label">Zones</span><strong>24</strong><span class="kpi-note">Monitored</span></article>
+        <article class="kpi warning"><span class="kpi-label">Alerts</span><strong id="alertCount">2</strong><span class="kpi-note">Needs review</span></article>
+        <article class="kpi"><span class="kpi-label">Occupancy</span><strong>68%</strong><span class="kpi-note">Current building load</span></article>
+        <article class="kpi"><span class="kpi-label">Average temperature</span><strong>21.4°C</strong><span class="kpi-note">Across active zones</span></article>
+      </section>
+
+      <section class="workspace-grid">
+        <article class="panel floorplan-panel" id="floorplanPanel">
+          <div class="panel-header"><div><h2>Building A · Floor 2</h2><p>Digital twin / operational overlay</p></div><select id="floorSelect" aria-label="Floor"><option>Floor 2</option><option>Floor 1</option><option>Basement</option></select></div>
+          <div class="floorplan-wrap">
+            <svg class="floorplan" viewBox="0 0 760 390" role="img" aria-label="Building floorplan with selectable zones">
+              <rect class="building" x="34" y="28" width="692" height="330" rx="3" />
+              <path class="wall" d="M34 184h692M350 28v156M350 184v174M520 28v156M520 184h206M34 282h175M209 282v76M558 184v174" />
+              <path class="wall fine" d="M84 28v75h90v81M174 103h120v81M520 103h105v81M625 28v75h-105M84 282v76M175 282v-65M558 282h85v76M350 245h208" />
+              <g class="furniture"><rect x="93" y="59" width="110" height="22"/><rect x="225" y="59" width="90" height="22"/><rect x="80" y="124" width="120" height="20"/><rect x="218" y="124" width="100" height="20"/><rect x="574" y="60" width="100" height="22"/><rect x="568" y="122" width="110" height="22"/><circle cx="128" cy="317" r="18"/><circle cx="180" cy="317" r="18"/><circle cx="610" cy="305" r="16"/><circle cx="660" cy="305" r="16"/></g>
+              <g class="zone normal" data-zone="office"><rect x="58" y="42" width="270" height="132"/><text x="78" y="72">Office A</text><circle cx="68" cy="64" r="5"/></g>
+              <g class="zone warning" data-zone="lab"><rect x="535" y="42" width="166" height="132"/><text x="555" y="72">Lab 02</text><circle cx="545" cy="64" r="5"/></g>
+              <g class="zone normal" data-zone="lobby"><rect x="58" y="202" width="280" height="135"/><text x="78" y="232">Lobby</text><circle cx="68" cy="224" r="5"/></g>
+              <g class="zone selected" data-zone="server"><rect x="535" y="202" width="166" height="135"/><text x="555" y="232">Server Room</text><circle cx="545" cy="224" r="5"/></g>
+              <text class="map-label" x="360" y="208">CORE / LIFTS</text>
+            </svg>
+          </div>
+          <div class="legend"><span><i class="dot normal-dot"></i>Normal</span><span><i class="dot warning-dot"></i>Warning</span><span><i class="dot offline-dot"></i>Offline</span><span class="legend-note">Select a zone for details</span></div>
+        </article>
+
+        <article class="panel zone-panel">
+          <div class="panel-header"><div><h2>Zone status</h2><p id="zoneSummary">4 zones shown</p></div><button class="text-button" id="refreshBtn">Refresh</button></div>
+          <div class="zone-table" id="zoneTable" role="list"></div>
+        </article>
+      </section>
+
+      <section class="lower-grid">
+        <article class="panel alerts-panel"><div class="panel-header"><div><h2>Alerts</h2><p>Current exceptions and recent resolutions</p></div><button class="text-button" id="clearAlerts">Clear resolved</button></div><div id="alertsList"></div></article>
+        <article class="panel trend-panel"><div class="panel-header"><div><h2>Indoor temperature</h2><p>Last 24 hours · °C</p></div><button class="text-button" id="trendBtn">View trends</button></div><div class="chart-wrap"><svg viewBox="0 0 720 210" class="chart" aria-label="Indoor temperature trend"><g class="grid-lines"><path d="M30 30H700M30 75H700M30 120H700M30 165H700"/></g><text x="5" y="34">26</text><text x="5" y="79">24</text><text x="5" y="124">22</text><text x="5" y="169">20</text><path class="line office-line" d="M30 126 C130 122 175 130 250 114 S390 125 470 110 S600 117 700 105"/><path class="line lab-line" d="M30 105 C130 100 190 108 260 92 S390 75 470 90 S590 78 700 84"/><path class="line lobby-line" d="M30 145 C135 144 180 140 260 143 S390 135 470 139 S590 132 700 136"/></svg><div class="chart-legend"><span><i class="line-key office-key"></i>Office A</span><span><i class="line-key lab-key"></i>Lab 02</span><span><i class="line-key lobby-key"></i>Lobby</span></div></div></article>
+      </section>
+
+      <footer class="utility-bar"><span class="utility-status">Last updated <strong id="lastUpdated">just now</strong></span><div><button class="utility-button" id="dataViewBtn">Data view</button><button class="utility-button" id="activityBtn">Activity log</button><button class="utility-button" id="helpBtn">Help</button></div></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>

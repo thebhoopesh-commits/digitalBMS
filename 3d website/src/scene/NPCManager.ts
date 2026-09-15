@@ -19,6 +19,7 @@ export class NPCManager {
   
   private capsuleGeom: THREE.CapsuleGeometry;
   private headGeom: THREE.SphereGeometry;
+  private zones: Record<string, ZoneBounds> = { ...OFFICE_ZONES };
 
   constructor(scene: THREE.Scene, hvacStore: HVACDataStore) {
     this.scene = scene;
@@ -40,7 +41,21 @@ export class NPCManager {
     this.headGeom = new THREE.SphereGeometry(0.22, 8, 8);
 
     // Init tracking arrays
-    for (const zoneId of Object.keys(OFFICE_ZONES)) {
+    for (const zoneId of Object.keys(this.zones)) {
+      this.npcs.set(zoneId, []);
+    }
+  }
+
+  public setEnvironment(_envId: string, zones?: Record<string, any>): void {
+    for (const [_, list] of this.npcs) {
+      for (const npc of list) {
+        this.scene.remove(npc.mesh);
+      }
+    }
+    this.npcs.clear();
+
+    this.zones = (zones as Record<string, ZoneBounds>) || { ...OFFICE_ZONES };
+    for (const zoneId of Object.keys(this.zones)) {
       this.npcs.set(zoneId, []);
     }
   }
@@ -74,12 +89,13 @@ export class NPCManager {
 
   public update(delta: number) {
     // 1. Reconcile Counts
-    for (const [zoneId, zoneBounds] of Object.entries(OFFICE_ZONES)) {
+    for (const [zoneId, zoneBounds] of Object.entries(this.zones)) {
       const uiData = this.hvacStore.getZoneData(zoneId);
       if (!uiData) continue;
 
       const targetCount = uiData.occupancy || 0;
-      const currentList = this.npcs.get(zoneId)!;
+      const currentList = this.npcs.get(zoneId);
+      if (!currentList) continue;
 
       // Spawn if too few
       while (currentList.length < targetCount) {
@@ -104,8 +120,9 @@ export class NPCManager {
     }
 
     // 2. Wandering Behavior
-    for (const [zoneId, zoneBounds] of Object.entries(OFFICE_ZONES)) {
-      const currentList = this.npcs.get(zoneId)!;
+    for (const [zoneId, zoneBounds] of Object.entries(this.zones)) {
+      const currentList = this.npcs.get(zoneId);
+      if (!currentList) continue;
 
       for (const npc of currentList) {
         const dist = npc.mesh.position.distanceTo(npc.targetPosition);

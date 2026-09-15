@@ -12,6 +12,8 @@
  *   (Z is inverted so "south" / +Z in Three.js maps to canvas-top)
  */
 
+import { MinimapRoom, WorldBounds } from '../types';
+
 // ---------- colour palette (dark-theme) ----------
 const COL_BG       = '#090d16';
 const COL_ROOM     = '#1e293b';
@@ -19,13 +21,6 @@ const COL_OUTLINE  = '#334155';
 const COL_PLAYER   = '#38bdf8';
 const COL_LABEL    = '#94a3b8';
 const COL_CORRIDOR = '#141c2b';
-
-// ---------- room definitions (world coords) ----------
-interface MinimapRoom {
-  label: string;
-  /** world-space AABB: [minX, minZ, maxX, maxZ] */
-  bounds: [number, number, number, number];
-}
 
 const ROOMS: MinimapRoom[] = [
   { label: 'Lobby',         bounds: [-20.0,   0.0,  20.0,  13.0] },
@@ -40,10 +35,11 @@ export class Minimap {
   private height: number;
 
   // World-space bounds that the canvas covers
-  private readonly worldMinX = -20;
-  private readonly worldMaxX =  20;
-  private readonly worldMinZ = -13;
-  private readonly worldMaxZ =  13;
+  private worldMinX = -20;
+  private worldMaxX =  20;
+  private worldMinZ = -13;
+  private worldMaxZ =  13;
+  private rooms: MinimapRoom[] = [...ROOMS];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -59,6 +55,20 @@ export class Minimap {
   }
 
   // ===== public API =====
+
+  public setEnvironment(
+    bounds: WorldBounds,
+    rooms?: MinimapRoom[]
+  ): void {
+    this.worldMinX = bounds.minX;
+    this.worldMaxX = bounds.maxX;
+    this.worldMinZ = bounds.minZ;
+    this.worldMaxZ = bounds.maxZ;
+    if (rooms && rooms.length > 0) {
+      this.rooms = [...rooms];
+    }
+    this.drawStaticFloorplan();
+  }
 
   /**
    * Called every frame from the render loop.
@@ -92,7 +102,7 @@ export class Minimap {
     ctx.fillRect(0, 0, this.width, this.height);
 
     // Draw each room
-    for (const room of ROOMS) {
+    for (const room of this.rooms) {
       const [minX, minZ, maxX, maxZ] = room.bounds;
 
       const x = this.worldToCanvasX(minX);

@@ -1,0 +1,13 @@
+{
+  "name": "digitaltwin-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digital Twin Root Scripts",
+  "scripts": {
+    "dev": "npm --prefix \"3d website\" run dev",
+    "build": "npm --prefix \"3d website\" run build",
+    "preview": "npm --prefix \"3d website\" run preview",
+    "typecheck": "npm --prefix \"3d website\" run typecheck",
+    "test": "npm --prefix \"3d website\" run test"
+  }
+}

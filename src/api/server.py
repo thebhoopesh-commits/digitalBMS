@@ -35,9 +35,7 @@ def create_app(coordinator: SimulationCoordinator = None) -> FastAPI:
             return FileResponse(os.path.join(ui_path, "index.html"))
 
     # Initialize and attach coordinator
-    coord = coordinator or SimulationCoordinator(
-        llm_api_key=os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
-    )
+    coord = coordinator or SimulationCoordinator()
     if not coord.is_initialized():
         coord.initialize()
 

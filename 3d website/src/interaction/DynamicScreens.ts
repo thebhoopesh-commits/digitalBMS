@@ -63,6 +63,12 @@ export abstract class BaseDynamicScreen implements IDynamicScreen {
     }
   }
 
+  public dispose(): void {
+    if (this.texture) {
+      this.texture.dispose();
+    }
+  }
+
   protected abstract renderCanvas(delta: number): void;
 }
 

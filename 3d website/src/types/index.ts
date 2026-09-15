@@ -72,7 +72,93 @@ export interface ISceneManager {
 // ==========================================
 
 export type NavigationMode = 'fps' | 'orbit' | 'transitioning' | 'focus';
-export type ZoneId = 'lobby' | 'open_office' | 'conference_room';
+
+export type EnvironmentId = 'corporate' | 'healthcare';
+export type CorporateZoneId = 'lobby' | 'open_office' | 'conference_room';
+export type HealthcareZoneId = 'hospital_lobby' | 'clinical_areas' | 'staff_areas' | 'support_hvac';
+export type EnvironmentZoneId = CorporateZoneId | HealthcareZoneId;
+export type ZoneId = CorporateZoneId | HealthcareZoneId | string;
+
+export interface IEnvironmentBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  minY?: number;
+  maxY?: number;
+}
+export type WorldBounds = IEnvironmentBounds;
+
+export interface IMinimapRoom {
+  label: string;
+  bounds: [number, number, number, number]; // [minX, minZ, maxX, maxZ] in world meters
+  color?: string;
+}
+export type MinimapRoom = IMinimapRoom;
+
+export interface BuildingMeta {
+  id: string;
+  name: string;
+  breadcrumb: string;
+  defaultZoneId: ZoneId;
+  zoneMetas: Record<string, any>;
+  renderSVG?: (
+    selectedZone: string,
+    zoneDataMap: Record<string, any>,
+    onSelectZone?: (zoneId: string) => void
+  ) => string;
+}
+
+export interface ZoneBounds {
+  id: string;
+  name: string;
+  displayName: string;
+  center: THREE.Vector3;
+  spawnPosition: THREE.Vector3;
+  spawnYaw: number;
+  bounds: THREE.Box3;
+}
+
+export interface ObstacleBox {
+  box: THREE.Box3;
+  name: string;
+  id: string;
+  isDoor?: boolean;
+}
+
+export interface TeleportBinding {
+  key: string;
+  zoneId: string;
+  label: string;
+}
+
+export interface IEnvironmentScene {
+  readonly id: EnvironmentId;
+  readonly name: string;
+  readonly defaultSpawnPosition: THREE.Vector3;
+  readonly defaultSpawnYaw: number;
+  readonly worldBounds: IEnvironmentBounds;
+  readonly group: THREE.Group;
+  readonly minimapRooms: IMinimapRoom[];
+  readonly commandGlass?: any;
+
+  build(): Promise<void> | void;
+  mount(parentScene: THREE.Scene): void;
+  unmount(parentScene: THREE.Scene): void;
+  dispose(): void;
+  update(delta: number, time: number): void;
+
+  getObstacles(): ObstacleBox[];
+  getInteractables(): IInteractable[];
+  getZones(): Record<string, ZoneBounds>;
+  getZoneMetas(): Record<string, any>;
+  getGlassBoards(): Record<string, any>;
+  getMinimapRooms?(): IMinimapRoom[];
+  getMascotPosition?(): THREE.Vector3;
+  getMascotSpawnPosition?(): THREE.Vector3;
+  getBuildingMeta?(): any;
+  getTeleportBindings?(): TeleportBinding[];
+}
 
 export interface IZoneDefinition {
   id: ZoneId;
@@ -107,6 +193,7 @@ export interface ICollisionEngine {
   obstacles: AABBObstacle[];
   addObstacle(box: THREE.Box3, name?: string): void;
   clearObstacles(): void;
+  setBounds?(bounds: WorldBounds): void;
   resolveMovement(
     currentPos: THREE.Vector3,
     desiredMovement: THREE.Vector3,
@@ -200,11 +287,13 @@ export interface IDynamicScreen {
   nextSlide?(): void;
   prevSlide?(): void;
   toggleTheme?(): void;
+  dispose?(): void;
 }
 
 export interface IInteractionManager {
   register(interactable: IInteractable): void;
   unregister(id: string): void;
+  clearAll?(): void;
   update(camera: THREE.Camera, mode: NavigationMode, mouseNDC?: THREE.Vector2): void;
   triggerPrimaryAction(): void;
   getActiveInteractable(): IInteractable | null;
@@ -296,7 +385,14 @@ export interface IOfficeDebug {
   setLighting(preset: string): boolean;
   setMode?(mode: string): boolean;
   testMascotState?(state: string): boolean;
+  switchView?(view: 'operations' | '3d'): boolean;
+  switchEnvironment?(env: EnvironmentId | string): Promise<boolean>;
+  getActiveEnvironment?(): EnvironmentId | string;
+  getAvailableEnvironments?(): (EnvironmentId | string)[];
+  isTransitioning?(): boolean;
 }
+
+export type OfficeDebugAPI = IOfficeDebug;
 
 declare global {
   interface Window {

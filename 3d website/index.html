@@ -959,59 +959,24 @@
 
     <!-- HUD Overlay Layer -->
     <div id="hud-layer">
-      <!-- Top Navigation & Status Bar -->
-      <header class="hud-header">
+      <!-- Top Navigation Bar for 3D Camera Mode -->
+      <header class="hud-header" style="display: none;">
         <div class="hud-brand">
-          <div class="brand-logo-icon">🏢</div>
           <div class="brand-info">
-            <span class="brand-name">DIGITAL BMS</span>
-            <span class="brand-tag">3D WORKSPACE</span>
-          </div>
-        </div>
-
-        <div class="hud-center-status">
-          <div id="zone-banner" class="hud-pill zone-pill">
-            <span class="status-pulse-dot"></span>
-            <span id="zone-text">Welcome Reception</span>
-            <span id="zone-live-temp" class="zone-live-temp"></span>
-          </div>
-          <div id="mode-badge" class="hud-pill mode-pill mode-fps">
-            <span class="mode-icon">👁️</span>
-            <span id="mode-text">FPS WALKTHROUGH</span>
-          </div>
-          <div id="time-badge" class="hud-pill time-pill">
-            <span class="time-icon">🕒</span>
-            <span id="time-text">08:00 AM</span>
-          </div>
-          <div id="weather-badge" class="hud-pill weather-pill">
-            <span class="weather-icon">☀️</span>
-            <span id="weather-text">--°C</span>
-            <button id="btn-toggle-weather" class="icon-btn weather-dropdown-btn">▼</button>
-            
-            <div id="weather-dropdown" class="weather-dropdown-panel hidden">
-              <div class="weather-dropdown-header">External Environment</div>
-              <div class="weather-stat-row">
-                <span>Temp:</span><span id="weather-out-temp">--°C</span>
-              </div>
-              <div class="weather-stat-row">
-                <span>Humidity:</span><span id="weather-out-hum">--%</span>
-              </div>
-              <div class="weather-stat-row">
-                <span>Solar Irr:</span><span id="weather-out-solar">-- W/m²</span>
-              </div>
-              <div class="weather-stat-row">
-                <span>Power Price:</span><span id="weather-out-price">$--/kWh</span>
-              </div>
-            </div>
+            <span class="brand-name font-bold">Building Management</span>
+            <span class="brand-tag">Main Campus / Level 01</span>
           </div>
         </div>
 
         <div class="hud-header-right">
-          <button id="btn-dashboard" class="hud-pill" onclick="window.location.href='/dashboard.html'" style="cursor: pointer; border: 1px solid #38bdf8; background: rgba(56, 189, 248, 0.1);">
-            <span>📊 2D Dashboard</span>
+          <button id="btn-back-to-ops" class="hud-pill" style="cursor: pointer; background: #2563eb; color: #ffffff; border: 1px solid #1d4ed8; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 4px;" title="Return to Operations View">
+            <span>← Return to Operations View</span>
           </button>
         </div>
       </header>
+
+      <!-- Primary Operations View Container -->
+      <main id="operations-view" class="operations-view-container"></main>
 
       <!-- Toast Notifications Container -->
       <div id="toast-container" class="toast-container"></div>
@@ -1056,6 +1021,10 @@
       <!-- Bottom Action Bar -->
       <footer class="hud-footer">
         <div class="hud-controls-toolbar">
+          <button id="btn-footer-ops" class="toolbar-btn" style="background: rgba(37, 99, 235, 0.2); border: 1px solid #3b82f6; color: #93c5fd;" title="Return to Operations View [X]">
+            <span class="btn-icon">🏢</span>
+            <span class="btn-text">Operations View [X]</span>
+          </button>
           <button id="btn-mode-toggle" class="toolbar-btn" title="Switch View Mode [V]">
             <span class="btn-icon">🔄</span>
             <span class="btn-text">Orbit View [V]</span>
@@ -1185,6 +1154,13 @@
         </div>
         <div class="drawer-content">
           <div class="setting-group">
+            <label class="setting-label">Environment Scene</label>
+            <div class="preset-button-row" style="margin-bottom: 15px;">
+              <button id="btn-env-corporate" class="preset-btn active">🏢 Corporate</button>
+              <button id="btn-env-healthcare" class="preset-btn">🏥 Healthcare</button>
+            </div>
+          </div>
+          <div class="setting-group">
             <label class="setting-label">Atmospheric Lighting</label>
             <div class="preset-button-row">
               <button class="preset-btn active" data-preset="day">☀️ Day</button>
@@ -1247,24 +1223,31 @@
         </div>
       </div>
 
-      <!-- Initial Welcome / Click-to-Start Overlay -->
-      <div id="overlay-start" class="welcome-overlay">
+      <!-- Initial Welcome / Click-to-Start Overlay (Hidden by default for immediate Operations View) -->
+      <div id="overlay-start" class="welcome-overlay hidden" style="display: none;">
         <div class="welcome-card">
-          <div class="welcome-icon">🏢</div>
+          <div class="welcome-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h1M9 13h1M9 17h1M14 13h1M14 17h1"/>
+            </svg>
+          </div>
           <h1>DIGITAL BMS</h1>
-          <p class="welcome-subtitle">Immersive 3D Corporate Workspace & Interactive Digital Twin</p>
+          <p class="welcome-subtitle">Facility Operations Center & Interactive 3D Digital Twin</p>
           <div class="features-preview-row">
-            <div class="preview-badge">🗣️ NLP + LLM Feedback</div>
-            <div class="preview-badge">🤖 RL Agent</div>
-            <div class="preview-badge">⚡ Real-Time Simulation</div>
-            <div class="preview-badge">🏢 3D Digital Twin</div>
+            <div class="preview-badge">NLP Feedback</div>
+            <div class="preview-badge">RL Optimization</div>
+            <div class="preview-badge">Real-Time Telemetry</div>
+            <div class="preview-badge">3D Digital Twin</div>
           </div>
           <div class="backend-status-row">
             <div id="backend-status-dot" class="backend-status-dot"></div>
             <span id="backend-status-text" class="backend-status-label">Checking backend...</span>
           </div>
-          <button id="btn-start-app" class="start-app-btn">ENTER WORKSPACE</button>
-          <p class="start-hint">Clicking initiates WebGL, Audio Engine & Camera</p>
+          <div style="display: flex; gap: 12px; justify-content: center; width: 100%; margin-top: 6px;">
+            <button id="btn-start-app" class="start-app-btn" style="flex: 1.2;">ENTER OPERATIONS VIEW</button>
+            <button id="btn-start-3d" class="start-app-btn" style="flex: 1; background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8;">ENTER 3D TWIN</button>
+          </div>
+          <p class="start-hint">Select your preferred experience — you can toggle between Operations View and 3D Twin anytime</p>
         </div>
       </div>
 

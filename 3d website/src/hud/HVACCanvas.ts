@@ -15,6 +15,8 @@ export interface ZoneHVACData {
   activeAlerts: number;
   isCommandGlass?: boolean;
   occupancy: number;
+  comfortViolation?: number;
+  activeNlpOffset?: number;
 }
 
 export class HVACCanvas {

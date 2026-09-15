@@ -387,17 +387,30 @@ SYSTEM_PROMPT = """Short friendly reply then JSON.
 Format:
 Response: <reply>
 JSON: <json>
-Fields: domain(thermal,visual,acoustic,air_quality,ergonomic,other), sensation, location(str/null), intensity(1-5), action_requested, confidence(0.0-1.0)"""
+Fields: domain(thermal,visual,acoustic,air_quality,ergonomic,other), sensation(too_cold, too_warm, stuffy, too_humid, too_dry, drafty, comfortable, other), location(str/null), intensity(1-5), action_requested(increase_temperature, decrease_temperature, increase_ventilation, null), confidence(0.0-1.0)"""
 
 FEW_SHOT_EXAMPLES = [
     {
         "input": "It's freezing in room 204, please turn up the heat!",
-        "output": json.dumps({
+        "response": "Understood, increasing the heat in room 204 right away.",
+        "json": json.dumps({
             "domain": "thermal",
             "sensation": "too_cold",
             "location": "room 204",
             "intensity": 4,
             "action_requested": "increase_temperature",
+            "confidence": 0.95
+        })
+    },
+    {
+        "input": "The conference room is too hot, please turn up the AC.",
+        "response": "Understood, increasing cooling in the conference room right away.",
+        "json": json.dumps({
+            "domain": "thermal",
+            "sensation": "too_warm",
+            "location": "conference room",
+            "intensity": 4,
+            "action_requested": "decrease_temperature",
             "confidence": 0.95
         })
     }
@@ -431,7 +444,11 @@ ws ::= [ \t\n\r]*
 '''
 
 
-def build_full_prompt(user_text: Any) -> str:
+def build_full_prompt(
+    user_text: Any,
+    environment_id: str = "corporate",
+    include_system_prompt: bool = True
+) -> str:
     """Construct prompt with system directives, few-shot examples, and occupant feedback."""
     if user_text is None:
         user_str = ""
@@ -442,10 +459,23 @@ def build_full_prompt(user_text: Any) -> str:
     else:
         user_str = str(user_text)
 
-    prompt_parts = [SYSTEM_PROMPT, "\nExamples:"]
+    prompt_parts = []
+    if include_system_prompt:
+        prompt_parts.append(SYSTEM_PROMPT)
+    
+    if environment_id == "healthcare":
+        prompt_parts.append("\nCurrent Environment: Healthcare / Hospital")
+        prompt_parts.append("Available location values: hospital_lobby, clinical_areas, staff_areas, support_hvac")
+    else:
+        prompt_parts.append("\nCurrent Environment: Corporate Office")
+        prompt_parts.append("Available location values: lobby, open_office, conference_room, server_room")
+
+    prompt_parts.append("\nExamples:")
     for ex in FEW_SHOT_EXAMPLES:
-        prompt_parts.append(f'Occupant: "{ex["input"]}"\nJSON: {ex["output"]}')
-    prompt_parts.append(f'\nOccupant: "{user_str}"\nJSON:')
+        resp_text = ex.get("response", "Understood, updating the system settings.")
+        json_text = ex.get("json") or ex.get("output", "{}")
+        prompt_parts.append(f'Occupant: "{ex["input"]}"\nResponse: {resp_text}\nJSON: {json_text}')
+    prompt_parts.append(f'\nOccupant: "{user_str}"\nResponse:')
     return "\n".join(prompt_parts)
 
 
@@ -612,9 +642,11 @@ class OllamaBackend(BaseInferenceBackend):
             ],
             "format": "json",
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.1),
-                "num_predict": kwargs.get("max_tokens", 256),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 1024),
                 "num_thread": kwargs.get("num_threads", 4),
                 **self.extra_options
             }
@@ -652,9 +684,11 @@ class OllamaBackend(BaseInferenceBackend):
                 {"role": "user", "content": prompt}
             ],
             "stream": True,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.1),
-                "num_predict": kwargs.get("max_tokens", 256),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 1024),
                 "num_thread": kwargs.get("num_threads", 4),
                 **self.extra_options
             }
@@ -677,7 +711,7 @@ class OllamaBackend(BaseInferenceBackend):
                             yield chunk_content
         except Exception as e:
             logger.error(f"Ollama streaming failed: {e}")
-            yield ""
+            raise RuntimeError(f"Ollama streaming failed at {self.base_url}: {e}") from e
 
     def _fallback_generate_api(self, prompt: str, **kwargs: Any) -> str:
         """Fallback querying /api/generate for older Ollama versions."""
@@ -686,9 +720,11 @@ class OllamaBackend(BaseInferenceBackend):
             "prompt": prompt,
             "format": "json",
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.1),
-                "num_predict": kwargs.get("max_tokens", 256),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 1024),
                 "num_thread": kwargs.get("num_threads", 4)
             }
         }
@@ -741,7 +777,7 @@ class MockBackend(BaseInferenceBackend):
         # Extract actual feedback string if prompt is formatted with wrappers
         text_to_analyze = prompt
         if isinstance(prompt, str):
-            matches = re.findall(r'Occupant:\s*"([^"]*)"\s*\nJSON:', prompt)
+            matches = re.findall(r'Occupant:\s*"([^"]*)"\s*(?:\nResponse:|\nJSON:)', prompt)
             if matches:
                 text_to_analyze = matches[-1]
 
@@ -753,6 +789,11 @@ class MockBackend(BaseInferenceBackend):
 
         # Deterministic simulation matching BMS domain rules
         return self._simulate_extraction(text_to_analyze)
+
+    def generate_stream(self, prompt: Any, grammar: Optional[str] = None, **kwargs: Any):
+        """Yield mock generation result as a stream."""
+        full_res = self.generate(prompt, grammar=grammar, **kwargs)
+        yield full_res
 
     def _simulate_extraction(self, text: Any) -> str:
         if text is None:
@@ -776,7 +817,7 @@ class MockBackend(BaseInferenceBackend):
 
         # Location heuristic
         loc_match = re.search(
-            r'\b(room\s+\d+\w*|zone\s+\w+|desk\s+\d+|office\s+\d+\w*|floor\s+\d+|conference\s+room\s+\d+|corner\s+desk)\b',
+            r'\b(lobby|room\s+\d+\w*|zone\s+\w+|desk\s+\d+|office\s+\d+\w*|floor\s+\d+|conference\s+room\s+\d+|corner\s+desk)\b',
             t,
             re.IGNORECASE
         )

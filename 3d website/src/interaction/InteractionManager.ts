@@ -86,6 +86,11 @@ export class InteractionManager implements IInteractionManager {
     this.interactables.delete(id);
   }
 
+  public clearAll(): void {
+    this.clearHoverState();
+    this.interactables.clear();
+  }
+
   public getActiveInteractable(): IInteractable | null {
     return this.activeInteractable;
   }
