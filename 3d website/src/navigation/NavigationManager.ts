@@ -3,12 +3,13 @@ import {
   INavigationManager,
   NavigationMode,
   ZoneId,
-  SurfaceType
+  SurfaceType,
+  ZoneBounds,
+  WorldBounds
 } from '../types';
 import { FirstPersonController } from './FirstPersonController';
 import { OrbitController } from './OrbitController';
 import { CollisionEngine } from './CollisionEngine';
-import { OFFICE_ZONES, ZoneBounds } from '../scene/OfficeFloorplan';
 
 export interface TransitionState {
   isActive: boolean;
@@ -40,7 +41,7 @@ export class NavigationManager implements INavigationManager {
   private scene: THREE.Scene;
   private domElement!: HTMLElement;
   private currentZoneId: ZoneId = 'lobby';
-  private zones: Record<string, ZoneBounds> = { ...OFFICE_ZONES };
+  private zones: Record<string, ZoneBounds> = {};
   private defaultSpawnPosition: THREE.Vector3 = new THREE.Vector3(0.0, 1.6, 11.0);
   private defaultSpawnYaw: number = 0.0;
 
@@ -102,7 +103,7 @@ export class NavigationManager implements INavigationManager {
   public setEnvironment(
     zones: Record<string, ZoneBounds>,
     defaultSpawn?: { position: THREE.Vector3; yaw: number },
-    worldBounds?: { minX: number; maxX: number; minZ: number; maxZ: number; minY?: number; maxY?: number }
+    worldBounds?: WorldBounds
   ): void {
     if (this.transition.isActive) {
       this.transition.isActive = false;
@@ -141,7 +142,7 @@ export class NavigationManager implements INavigationManager {
 
   public setObstacles(
     obstacles: Array<{ box: THREE.Box3; name?: string; id?: string; isDoor?: boolean }>,
-    worldBounds?: { minX: number; maxX: number; minZ: number; maxZ: number; minY?: number; maxY?: number }
+    worldBounds?: WorldBounds
   ): void {
     this.collisionEngine.clearObstacles();
     if (worldBounds) {

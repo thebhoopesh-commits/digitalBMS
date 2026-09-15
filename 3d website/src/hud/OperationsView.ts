@@ -1,8 +1,10 @@
 import { HVACDataStore } from '../data/HVACDataStore';
 import { ZoneHVACData } from './HVACCanvas';
+import { BuildingMeta } from '../types';
+import { HEALTHCARE_ZONE_METAS } from '../scene/healthcare/HealthcareScene';
 import './operations_view.css';
 
-export type ZoneId = 'open_office' | 'conference_room' | 'lobby';
+export type ZoneId = 'open_office' | 'conference_room' | 'lobby' | 'hospital_lobby' | 'clinical_areas' | 'staff_areas' | 'support_hvac' | string;
 
 export interface ZoneMeta {
   id: ZoneId;

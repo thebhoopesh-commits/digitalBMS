@@ -444,7 +444,11 @@ ws ::= [ \t\n\r]*
 '''
 
 
-def build_full_prompt(user_text: Any, environment_id: str = "corporate") -> str:
+def build_full_prompt(
+    user_text: Any,
+    environment_id: str = "corporate",
+    include_system_prompt: bool = True
+) -> str:
     """Construct prompt with system directives, few-shot examples, and occupant feedback."""
     if user_text is None:
         user_str = ""
@@ -455,7 +459,9 @@ def build_full_prompt(user_text: Any, environment_id: str = "corporate") -> str:
     else:
         user_str = str(user_text)
 
-    prompt_parts = [SYSTEM_PROMPT]
+    prompt_parts = []
+    if include_system_prompt:
+        prompt_parts.append(SYSTEM_PROMPT)
     
     if environment_id == "healthcare":
         prompt_parts.append("\nCurrent Environment: Healthcare / Hospital")
@@ -636,9 +642,11 @@ class OllamaBackend(BaseInferenceBackend):
             ],
             "format": "json",
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.1),
-                "num_predict": kwargs.get("max_tokens", 256),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 1024),
                 "num_thread": kwargs.get("num_threads", 4),
                 **self.extra_options
             }
@@ -676,9 +684,11 @@ class OllamaBackend(BaseInferenceBackend):
                 {"role": "user", "content": prompt}
             ],
             "stream": True,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.1),
-                "num_predict": kwargs.get("max_tokens", 256),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 1024),
                 "num_thread": kwargs.get("num_threads", 4),
                 **self.extra_options
             }
@@ -710,9 +720,11 @@ class OllamaBackend(BaseInferenceBackend):
             "prompt": prompt,
             "format": "json",
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.1),
-                "num_predict": kwargs.get("max_tokens", 256),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 1024),
                 "num_thread": kwargs.get("num_threads", 4)
             }
         }

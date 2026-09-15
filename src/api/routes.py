@@ -192,7 +192,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             fallback_to_mock=False,
         )
         
-        prompt = build_full_prompt(body.message, environment_id=body.environment_id)
+        prompt = build_full_prompt(body.message, environment_id=body.environment_id, include_system_prompt=False)
         full_text = ""
         is_json_part = False
         yielded_len = 0
@@ -200,7 +200,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         
         # Stream the conversational response from local Ollama
         try:
-            for chunk in local_t.backend.generate_stream(prompt=prompt, grammar=None):
+            for chunk in local_t.backend.generate_stream(prompt=prompt, grammar=None, max_tokens=96):
                 full_text += chunk
                 
                 if not is_json_part:

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AABBObstacle, ICollisionEngine } from '../types';
+import { AABBObstacle, ICollisionEngine, WorldBounds } from '../types';
 
 export class CollisionEngine implements ICollisionEngine {
   public static instances: Set<CollisionEngine> = new Set();
@@ -15,7 +15,7 @@ export class CollisionEngine implements ICollisionEngine {
     maxY: 4.0
   };
 
-  public setBounds(bounds: { minX: number; maxX: number; minZ: number; maxZ: number; minY?: number; maxY?: number }): void {
+  public setBounds(bounds: WorldBounds): void {
     this.BOUNDS.minX = bounds.minX;
     this.BOUNDS.maxX = bounds.maxX;
     this.BOUNDS.minZ = bounds.minZ;

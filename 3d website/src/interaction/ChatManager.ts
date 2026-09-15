@@ -7,6 +7,7 @@ export class ChatManager {
   private typingBubble: HTMLElement | null = null;
 
   private getZoneContext: (() => string) | null = null;
+  private activeEnvironment: 'corporate' | 'healthcare' = 'corporate';
 
   constructor(getZoneContext?: () => string) {
     if (getZoneContext) {
@@ -18,6 +19,14 @@ export class ChatManager {
       this.injectKeyboardHint();
       this.injectQuickPromptChips();
     }
+  }
+
+  public setEnvironment(envId: 'corporate' | 'healthcare' | string): void {
+    this.activeEnvironment = envId === 'healthcare' ? 'healthcare' : 'corporate';
+  }
+
+  public getEnvironment(): 'corporate' | 'healthcare' {
+    return this.activeEnvironment;
   }
 
   private cacheDOMElements(): void {
@@ -213,7 +222,12 @@ export class ChatManager {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: backendMessage, history: this.history }),
+        body: JSON.stringify({
+          message: backendMessage,
+          history: this.history,
+          environment: this.activeEnvironment,
+          environment_id: this.activeEnvironment
+        }),
       });
 
       if (!response.ok) {

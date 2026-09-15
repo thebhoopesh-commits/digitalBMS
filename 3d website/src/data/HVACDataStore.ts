@@ -41,9 +41,15 @@ export class HVACDataStore {
   constructor() {
     this.alertEngine = new AlertEngine();
     this.initCommandData();
+    // Corporate zones
     this.initZone('lobby', 21.0, 1.5, 'ECO', 41.5, 2);
     this.initZone('open_office', 23.0, 3.5, 'COOLING', 42.8, 8);
     this.initZone('conference_room', 22.5, 2.1, 'COOLING', 44.1, 4);
+    // Healthcare zones
+    this.initZone('hospital_lobby', 21.0, 2.8, 'ECO', 45.0, 6);
+    this.initZone('clinical_areas', 21.0, 4.5, 'COOLING', 48.2, 12);
+    this.initZone('staff_areas', 22.0, 2.4, 'ECO', 43.5, 8);
+    this.initZone('support_hvac', 19.5, 6.2, 'ECO', 38.0, 2);
     this.connectSSE();
   }
 

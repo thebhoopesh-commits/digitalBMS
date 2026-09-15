@@ -12,6 +12,8 @@
  *   (Z is inverted so "south" / +Z in Three.js maps to canvas-top)
  */
 
+import { MinimapRoom, WorldBounds } from '../types';
+
 // ---------- colour palette (dark-theme) ----------
 const COL_BG       = '#090d16';
 const COL_ROOM     = '#1e293b';
@@ -19,13 +21,6 @@ const COL_OUTLINE  = '#334155';
 const COL_PLAYER   = '#38bdf8';
 const COL_LABEL    = '#94a3b8';
 const COL_CORRIDOR = '#141c2b';
-
-// ---------- room definitions (world coords) ----------
-interface MinimapRoom {
-  label: string;
-  /** world-space AABB: [minX, minZ, maxX, maxZ] */
-  bounds: [number, number, number, number];
-}
 
 const ROOMS: MinimapRoom[] = [
   { label: 'Lobby',         bounds: [-20.0,   0.0,  20.0,  13.0] },
@@ -62,7 +57,7 @@ export class Minimap {
   // ===== public API =====
 
   public setEnvironment(
-    bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+    bounds: WorldBounds,
     rooms?: MinimapRoom[]
   ): void {
     this.worldMinX = bounds.minX;

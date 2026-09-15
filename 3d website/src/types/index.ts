@@ -87,11 +87,26 @@ export interface IEnvironmentBounds {
   minY?: number;
   maxY?: number;
 }
+export type WorldBounds = IEnvironmentBounds;
 
 export interface IMinimapRoom {
   label: string;
   bounds: [number, number, number, number]; // [minX, minZ, maxX, maxZ] in world meters
   color?: string;
+}
+export type MinimapRoom = IMinimapRoom;
+
+export interface BuildingMeta {
+  id: string;
+  name: string;
+  breadcrumb: string;
+  defaultZoneId: ZoneId;
+  zoneMetas: Record<string, any>;
+  renderSVG?: (
+    selectedZone: string,
+    zoneDataMap: Record<string, any>,
+    onSelectZone?: (zoneId: string) => void
+  ) => string;
 }
 
 export interface ZoneBounds {
@@ -178,6 +193,7 @@ export interface ICollisionEngine {
   obstacles: AABBObstacle[];
   addObstacle(box: THREE.Box3, name?: string): void;
   clearObstacles(): void;
+  setBounds?(bounds: WorldBounds): void;
   resolveMovement(
     currentPos: THREE.Vector3,
     desiredMovement: THREE.Vector3,
@@ -277,6 +293,7 @@ export interface IDynamicScreen {
 export interface IInteractionManager {
   register(interactable: IInteractable): void;
   unregister(id: string): void;
+  clearAll?(): void;
   update(camera: THREE.Camera, mode: NavigationMode, mouseNDC?: THREE.Vector2): void;
   triggerPrimaryAction(): void;
   getActiveInteractable(): IInteractable | null;
