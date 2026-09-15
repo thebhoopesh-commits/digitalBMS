@@ -5,8 +5,8 @@ export class CollisionEngine implements ICollisionEngine {
   public static instances: Set<CollisionEngine> = new Set();
   public obstacles: AABBObstacle[] = [];
 
-  // Boundary wall constraints of the office floorplan
-  public readonly BOUNDS = {
+  // Boundary wall constraints of the active floorplan
+  public BOUNDS = {
     minX: -19.5,
     maxX: 19.5,
     minZ: -12.5,
@@ -14,6 +14,15 @@ export class CollisionEngine implements ICollisionEngine {
     minY: 0.0,
     maxY: 4.0
   };
+
+  public setBounds(bounds: { minX: number; maxX: number; minZ: number; maxZ: number; minY?: number; maxY?: number }): void {
+    this.BOUNDS.minX = bounds.minX;
+    this.BOUNDS.maxX = bounds.maxX;
+    this.BOUNDS.minZ = bounds.minZ;
+    this.BOUNDS.maxZ = bounds.maxZ;
+    if (bounds.minY !== undefined) this.BOUNDS.minY = bounds.minY;
+    if (bounds.maxY !== undefined) this.BOUNDS.maxY = bounds.maxY;
+  }
 
   // Numerical tolerances
   private readonly EPSILON = 0.001; // 1mm skin buffer

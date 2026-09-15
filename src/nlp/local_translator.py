@@ -444,7 +444,7 @@ ws ::= [ \t\n\r]*
 '''
 
 
-def build_full_prompt(user_text: Any) -> str:
+def build_full_prompt(user_text: Any, environment_id: str = "corporate") -> str:
     """Construct prompt with system directives, few-shot examples, and occupant feedback."""
     if user_text is None:
         user_str = ""
@@ -455,7 +455,16 @@ def build_full_prompt(user_text: Any) -> str:
     else:
         user_str = str(user_text)
 
-    prompt_parts = [SYSTEM_PROMPT, "\nExamples:"]
+    prompt_parts = [SYSTEM_PROMPT]
+    
+    if environment_id == "healthcare":
+        prompt_parts.append("\nCurrent Environment: Healthcare / Hospital")
+        prompt_parts.append("Available location values: hospital_lobby, clinical_areas, staff_areas, support_hvac")
+    else:
+        prompt_parts.append("\nCurrent Environment: Corporate Office")
+        prompt_parts.append("Available location values: lobby, open_office, conference_room, server_room")
+
+    prompt_parts.append("\nExamples:")
     for ex in FEW_SHOT_EXAMPLES:
         resp_text = ex.get("response", "Understood, updating the system settings.")
         json_text = ex.get("json") or ex.get("output", "{}")

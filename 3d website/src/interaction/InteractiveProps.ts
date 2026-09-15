@@ -14,7 +14,7 @@ import { NavigationManager } from '../navigation/NavigationManager';
 
 export class InteractiveProps {
   private scene: THREE.Scene;
-  private floorplan: OfficeFloorplan;
+  public floorplan: any;
   private interactionManager: InteractionManager;
   private audioManager: AudioManager;
   private materials: Materials;
@@ -353,14 +353,14 @@ export class InteractiveProps {
     // 2. Conference Sliding Glass Door
     if (this.floorplan.confDoorMesh) {
       this.doorMesh = this.floorplan.confDoorMesh;
-      this.doorCurrentZ = this.doorMesh.position.z;
+      if (!this.doorMesh) return; this.doorCurrentZ = this.doorMesh.position.z;
       this.doorTargetZ = this.doorClosedZ;
 
       this.interactionManager.register({
         id: 'conf_door_sliding',
         name: 'Conference Glass Sliding Door',
         category: 'door',
-        mesh: this.doorMesh,
+        mesh: this.doorMesh!,
         prompt: 'Toggle Door [E]',
         distanceCutoff: 4.5,
         onInteract: () => {
@@ -483,7 +483,9 @@ export class InteractiveProps {
     this.audioManager.playDoorSound(this.isDoorOpen);
 
     // Update collision obstacle state
-    this.floorplan.setDoorState('conf_door_sliding', this.isDoorOpen);
+      if (typeof this.floorplan.setDoorState === 'function') {
+        this.floorplan.setDoorState('conf_door_sliding', this.isDoorOpen);
+      }
     if (this.onDoorToggle) {
       this.onDoorToggle('conf_door_sliding', this.isDoorOpen);
     }
@@ -541,6 +543,22 @@ export class InteractiveProps {
           this.espressoLED.material.color.setHex(0x22c55e); // Green when done
         }
       }
+    }
+  }
+
+  public dispose(): void {
+    for (const screen of this.dynamicScreens) {
+      screen.dispose?.();
+    }
+    if (this.steamParticles) {
+      for (const p of this.steamParticles) {
+        p.mesh.geometry?.dispose();
+        if (p.mesh.material) {
+          if (Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => m.dispose());
+          else p.mesh.material.dispose();
+        }
+      }
+      this.steamParticles = [];
     }
   }
 }

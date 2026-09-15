@@ -81,4 +81,38 @@ export class GlassBoard {
   public updateData(data: ZoneHVACData) {
     this.hvacCanvas.drawZoneData(data);
   }
+
+  public dispose(): void {
+    if (this.hvacCanvas && this.hvacCanvas.texture) {
+      this.hvacCanvas.texture.dispose();
+    }
+    if (this.glassMesh) {
+      this.glassMesh.geometry?.dispose();
+      if (Array.isArray(this.glassMesh.material)) {
+        this.glassMesh.material.forEach(m => m.dispose());
+      } else if (this.glassMesh.material) {
+        this.glassMesh.material.dispose();
+      }
+    }
+    if (this.uiMesh) {
+      this.uiMesh.geometry?.dispose();
+      if (Array.isArray(this.uiMesh.material)) {
+        this.uiMesh.material.forEach(m => m.dispose());
+      } else if (this.uiMesh.material) {
+        this.uiMesh.material.dispose();
+      }
+    }
+    while (this.group.children.length > 0) {
+      const child = this.group.children[0] as any;
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m: any) => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+      this.group.remove(child);
+    }
+  }
 }

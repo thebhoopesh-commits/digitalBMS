@@ -40,10 +40,11 @@ export class Minimap {
   private height: number;
 
   // World-space bounds that the canvas covers
-  private readonly worldMinX = -20;
-  private readonly worldMaxX =  20;
-  private readonly worldMinZ = -13;
-  private readonly worldMaxZ =  13;
+  private worldMinX = -20;
+  private worldMaxX =  20;
+  private worldMinZ = -13;
+  private worldMaxZ =  13;
+  private rooms: MinimapRoom[] = [...ROOMS];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -59,6 +60,20 @@ export class Minimap {
   }
 
   // ===== public API =====
+
+  public setEnvironment(
+    bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+    rooms?: MinimapRoom[]
+  ): void {
+    this.worldMinX = bounds.minX;
+    this.worldMaxX = bounds.maxX;
+    this.worldMinZ = bounds.minZ;
+    this.worldMaxZ = bounds.maxZ;
+    if (rooms && rooms.length > 0) {
+      this.rooms = [...rooms];
+    }
+    this.drawStaticFloorplan();
+  }
 
   /**
    * Called every frame from the render loop.
@@ -92,7 +107,7 @@ export class Minimap {
     ctx.fillRect(0, 0, this.width, this.height);
 
     // Draw each room
-    for (const room of ROOMS) {
+    for (const room of this.rooms) {
       const [minX, minZ, maxX, maxZ] = room.bounds;
 
       const x = this.worldToCanvasX(minX);

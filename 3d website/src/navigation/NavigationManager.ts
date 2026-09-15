@@ -40,6 +40,9 @@ export class NavigationManager implements INavigationManager {
   private scene: THREE.Scene;
   private domElement!: HTMLElement;
   private currentZoneId: ZoneId = 'lobby';
+  private zones: Record<string, ZoneBounds> = { ...OFFICE_ZONES };
+  private defaultSpawnPosition: THREE.Vector3 = new THREE.Vector3(0.0, 1.6, 11.0);
+  private defaultSpawnYaw: number = 0.0;
 
   // Parabolic transition state
   private transition: TransitionState = {
@@ -84,13 +87,69 @@ export class NavigationManager implements INavigationManager {
     this.orbitController.init(domElement, this.camera);
 
     // Initial state: Start in FPS mode at lobby
-    const spawn = OFFICE_ZONES.lobby.spawnPosition;
-    const yaw = OFFICE_ZONES.lobby.spawnYaw;
-    this.setPosition(spawn, yaw);
+    this.setPosition(this.defaultSpawnPosition, this.defaultSpawnYaw);
 
     this.fpsController.setEnabled(true);
     this.orbitController.setEnabled(false);
     this.mode = 'fps';
+  }
+
+  public setActiveZoneRegistry(zones: Record<string, ZoneBounds>): void {
+    this.zones = { ...zones };
+    this.checkCurrentZone();
+  }
+
+  public setEnvironment(
+    zones: Record<string, ZoneBounds>,
+    defaultSpawn?: { position: THREE.Vector3; yaw: number },
+    worldBounds?: { minX: number; maxX: number; minZ: number; maxZ: number; minY?: number; maxY?: number }
+  ): void {
+    if (this.transition.isActive) {
+      this.transition.isActive = false;
+    }
+    if (this.mode === 'focus') {
+      this.exitFocusMode();
+    }
+
+    this.zones = { ...zones };
+    if (defaultSpawn) {
+      this.defaultSpawnPosition.copy(defaultSpawn.position);
+      this.defaultSpawnYaw = defaultSpawn.yaw;
+    } else {
+      const firstZone = Object.values(this.zones)[0];
+      if (firstZone) {
+        this.defaultSpawnPosition.copy(firstZone.spawnPosition);
+        this.defaultSpawnYaw = firstZone.spawnYaw;
+      }
+    }
+
+    if (worldBounds) {
+      this.collisionEngine.setBounds(worldBounds);
+    }
+
+    this.setPosition(this.defaultSpawnPosition, this.defaultSpawnYaw);
+
+    if (this.mode === 'orbit') {
+      const center = worldBounds
+        ? new THREE.Vector3((worldBounds.minX + worldBounds.maxX) / 2, 1.2, (worldBounds.minZ + worldBounds.maxZ) / 2)
+        : new THREE.Vector3(0, 1.2, 0);
+      this.orbitController.setTarget(center, true);
+    }
+
+    this.checkCurrentZone();
+  }
+
+  public setObstacles(
+    obstacles: Array<{ box: THREE.Box3; name?: string; id?: string; isDoor?: boolean }>,
+    worldBounds?: { minX: number; maxX: number; minZ: number; maxZ: number; minY?: number; maxY?: number }
+  ): void {
+    this.collisionEngine.clearObstacles();
+    if (worldBounds) {
+      this.collisionEngine.setBounds(worldBounds);
+    }
+    for (const obs of obstacles) {
+      this.collisionEngine.addObstacle(obs.box, obs.name, obs.id, obs.isDoor);
+    }
   }
 
   public getPosition(): THREE.Vector3 {
@@ -146,12 +205,12 @@ export class NavigationManager implements INavigationManager {
 
   private checkCurrentZone(): void {
     const pos = this.getPosition();
-    for (const key in OFFICE_ZONES) {
-      if (OFFICE_ZONES[key].bounds.containsPoint(pos)) {
+    for (const key in this.zones) {
+      if (this.zones[key].bounds.containsPoint(pos)) {
         if (this.currentZoneId !== key) {
           this.currentZoneId = key as ZoneId;
           if (this.onZoneChange) {
-            this.onZoneChange(this.currentZoneId, OFFICE_ZONES[key]);
+            this.onZoneChange(this.currentZoneId, this.zones[key]);
           }
         }
         return;
@@ -214,9 +273,14 @@ export class NavigationManager implements INavigationManager {
       this.orbitController.setEnabled(false);
 
       // Target FPS position: Zone spawn point
-      const targetZone = OFFICE_ZONES[this.currentZoneId] || OFFICE_ZONES.entrance;
-      endPos.copy(targetZone.spawnPosition);
-      targetYaw = targetZone.spawnYaw;
+      const targetZone = this.zones[this.currentZoneId] || Object.values(this.zones)[0];
+      if (targetZone) {
+        endPos.copy(targetZone.spawnPosition);
+        targetYaw = targetZone.spawnYaw;
+      } else {
+        endPos.copy(this.defaultSpawnPosition);
+        targetYaw = this.defaultSpawnYaw;
+      }
 
       this._scratchEuler.set(0, targetYaw, 0, 'YXZ');
       endQuat.setFromEuler(this._scratchEuler);
@@ -290,7 +354,7 @@ export class NavigationManager implements INavigationManager {
    * Smooth or Instant Teleportation to a specific functional zone
    */
   public teleportTo(zoneKey: ZoneId | string, smooth: boolean = true): void {
-    const zone = OFFICE_ZONES[zoneKey];
+    const zone = this.zones[zoneKey];
     if (!zone) {
       console.warn(`[NavigationManager] Unknown zone: ${zoneKey}`);
       return;
@@ -383,8 +447,12 @@ export class NavigationManager implements INavigationManager {
       this.fpsController.pitchObject.add(this.camera);
       this.camera.position.set(0, 0, 0);
       this.camera.rotation.set(0, 0, 0);
-      const zone = OFFICE_ZONES[this.currentZoneId] || OFFICE_ZONES.entrance;
-      this.fpsController.setPosition(zone.spawnPosition, zone.spawnYaw);
+      const zone = this.zones[this.currentZoneId] || Object.values(this.zones)[0];
+      if (zone) {
+        this.fpsController.setPosition(zone.spawnPosition, zone.spawnYaw);
+      } else {
+        this.fpsController.setPosition(this.defaultSpawnPosition, this.defaultSpawnYaw);
+      }
       this.fpsController.setEnabled(true);
     } else {
       this.fpsController.setEnabled(false);

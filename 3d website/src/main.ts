@@ -1,7 +1,7 @@
 import { SceneManager } from './scene/SceneManager';
 import { LightingManager } from './scene/LightingManager';
 import { Materials } from './scene/Materials';
-import { OfficeFloorplan } from './scene/OfficeFloorplan';
+import { EnvironmentManager } from './scene/EnvironmentManager';
 import { NavigationManager } from './navigation/NavigationManager';
 import { AudioManager } from './audio/AudioManager';
 import { InteractionManager } from './interaction/InteractionManager';
@@ -11,7 +11,14 @@ import { Minimap } from './hud/Minimap';
 import { HVACDataStore } from './data/HVACDataStore';
 import { NPCManager } from './scene/NPCManager';
 import { MascotManager } from './scene/MascotManager';
+import { OperationsView, ZoneId } from './hud/OperationsView';
 import { IOfficeDebug, LightingPresetName } from './types';
+
+declare global {
+  interface Window {
+    environmentManager: EnvironmentManager;
+  }
+}
 
 let manualTimeOverride: number | null = null;
 async function bootstrap() {
@@ -33,17 +40,18 @@ async function bootstrap() {
   sceneManager.lightingManager = lightingManager;
   lightingManager.setPreset('day', 0);
 
-  // 5. Build 3D Multi-Zone Office Floorplan
-  const floorplan = new OfficeFloorplan(materials);
-  floorplan.build();
-  sceneManager.scene.add(floorplan.group);
+  // 5. Build Environment Manager
+  const envManager = new EnvironmentManager(sceneManager.scene, materials);
+  window.environmentManager = envManager;
+  await envManager.init('corporate');
+  const activeScene = envManager.getActiveScene();
 
   // 6. Initialize Dual Navigation & Collision Subsystem
   const navigationManager = new NavigationManager(sceneManager.scene, sceneManager.camera);
   navigationManager.init(webglContainer);
 
   // Register all architectural & furniture obstacles from floorplan into collision engine
-  const obstacles = floorplan.getObstacles();
+  const obstacles = activeScene.getObstacles();
   for (const obs of obstacles) {
     navigationManager.addObstacle(obs.box, obs.name, obs.id, obs.isDoor);
   }
@@ -53,7 +61,7 @@ async function bootstrap() {
   const interactionManager = new InteractionManager();
   const interactiveProps = new InteractiveProps(
     sceneManager.scene,
-    floorplan,
+    envManager.getActiveScene() as any,
     interactionManager,
     audioManager,
     materials,
@@ -81,9 +89,47 @@ async function bootstrap() {
   // 8. Wire Subsystems Update Hooks in Main Render Loop
   let time = 0;
   let lastUpdate = 0;
+  let lastOpsUpdate = 0;
   const hvacStore = new HVACDataStore();
   const npcManager = new NPCManager(sceneManager.scene, hvacStore);
   const mascotManager = new MascotManager(sceneManager.scene, hvacStore);
+
+  // 8b. Initialize Primary Operations View
+  let currentViewMode: 'operations' | '3d' = 'operations';
+
+  const operationsView = new OperationsView(hvacStore, {
+    onTeleportTo3D: (zoneId: ZoneId) => {
+      switchViewMode('3d');
+      navigationManager.teleportTo(zoneId, true);
+    }
+  });
+  operationsView.init('operations-view');
+
+  function switchViewMode(mode: 'operations' | '3d') {
+    currentViewMode = mode;
+    const hudHeader = document.querySelector('.hud-header') as HTMLElement | null;
+    const minimapContainer = document.getElementById('minimap-container');
+    const hudFooter = document.querySelector('.hud-footer') as HTMLElement | null;
+    const reticle = document.getElementById('reticle');
+
+    if (mode === 'operations') {
+      operationsView.setVisible(true);
+      if (hudHeader) hudHeader.style.display = 'none';
+      minimapContainer?.classList.add('hidden');
+      if (hudFooter) hudFooter.style.display = 'none';
+      if (reticle) reticle.classList.add('hidden');
+      document.exitPointerLock?.();
+    } else {
+      operationsView.setVisible(false);
+      if (hudHeader) hudHeader.style.display = 'flex';
+      minimapContainer?.classList.remove('hidden');
+      if (hudFooter) hudFooter.style.display = '';
+      if (navigationManager.mode === 'fps' && reticle) reticle.classList.remove('hidden');
+    }
+  }
+
+  // Ensure operations view is active on load
+  switchViewMode('operations');
 
   sceneManager.registerUpdateCallback((delta) => {
     time += delta;
@@ -94,6 +140,12 @@ async function bootstrap() {
     hvacStore.update(delta);
     npcManager.update(delta);
     mascotManager.update(delta);
+
+    // Update Operations View at 3 FPS
+    if (time - lastOpsUpdate > 0.3) {
+      lastOpsUpdate = time;
+      operationsView.update();
+    }
 
     // Update minimap with current player position and facing direction
     if (minimap) {
@@ -111,14 +163,15 @@ async function bootstrap() {
         sceneManager.lightingManager.updateRealtimeSun(activeHour, 12.9184, 79.1325);
       }
       
-      if (floorplan.commandGlass) {
-        floorplan.commandGlass.updateData(hvacStore.getCommandData());
+      const sceneAny = envManager.getActiveScene() as any;
+      if (sceneAny.commandGlass) {
+        sceneAny.commandGlass.updateData(hvacStore.getCommandData());
       }
       
-      Object.keys(floorplan.glassBoards).forEach(zone => {
+      if (sceneAny.glassBoards) Object.keys(sceneAny.glassBoards).forEach(zone => {
         const data = hvacStore.getZoneData(zone);
         if (data) {
-          floorplan.glassBoards[zone].updateData(data);
+          sceneAny.glassBoards[zone].updateData(data);
         }
       });
     }
@@ -374,6 +427,10 @@ async function bootstrap() {
       case 'M':
         toggleMute();
         break;
+      case 'x':
+      case 'X':
+        switchViewMode(currentViewMode === 'operations' ? '3d' : 'operations');
+        break;
     }
   });
 
@@ -397,7 +454,7 @@ async function bootstrap() {
     }
   })();
 
-  document.getElementById('btn-start-app')?.addEventListener('click', async () => {
+  const enterApp = async (targetMode: 'operations' | '3d') => {
     const overlay = document.getElementById('overlay-start');
     if (overlay) {
       overlay.style.opacity = '0';
@@ -413,8 +470,23 @@ async function bootstrap() {
 
     await audioManager.init();
     audioManager.setAmbientEnabled(true);
-    navigationManager.fpsController.lock();
-  });
+
+    switchViewMode(targetMode);
+    if (targetMode === '3d') {
+      navigationManager.fpsController.lock();
+    }
+  };
+
+  document.getElementById('btn-start-app')?.addEventListener('click', () => enterApp('operations'));
+  document.getElementById('btn-start-3d')?.addEventListener('click', () => enterApp('3d'));
+
+  // Return to Operations View from 3D Mode
+  document.getElementById('btn-back-to-ops')?.addEventListener('click', () => switchViewMode('operations'));
+  document.getElementById('btn-footer-ops')?.addEventListener('click', () => switchViewMode('operations'));
+
+  // Header View Switcher Tabs (fallback)
+  document.getElementById('btn-switch-ops')?.addEventListener('click', () => switchViewMode('operations'));
+  document.getElementById('btn-switch-3d')?.addEventListener('click', () => switchViewMode('3d'));
 
   document.getElementById('btn-mode-toggle')?.addEventListener('click', toggleViewMode);
 
@@ -563,10 +635,35 @@ async function bootstrap() {
         return true;
       }
       return false;
+    },
+    switchView: (view: 'operations' | '3d') => {
+      switchViewMode(view);
+      return true;
     }
   };
 
   (window as any).__OFFICE_DEBUG__ = debugContract;
+
+  
+  document.getElementById('btn-env-corporate')?.addEventListener('click', async () => {
+    await envManager.switchEnvironment('corporate');
+    navigationManager.collisionEngine.clearObstacles();
+    envManager.getActiveScene().getObstacles().forEach(obs => navigationManager.addObstacle(obs.box, obs.name, obs.id, obs.isDoor));
+    interactiveProps.floorplan = envManager.getActiveScene() as any;
+    navigationManager.teleportTo('lobby', true);
+    document.getElementById('btn-env-corporate')?.classList.add('active');
+    document.getElementById('btn-env-healthcare')?.classList.remove('active');
+  });
+  document.getElementById('btn-env-healthcare')?.addEventListener('click', async () => {
+    await envManager.switchEnvironment('healthcare');
+    navigationManager.collisionEngine.clearObstacles();
+    envManager.getActiveScene().getObstacles().forEach(obs => navigationManager.addObstacle(obs.box, obs.name, obs.id, obs.isDoor));
+    interactiveProps.floorplan = envManager.getActiveScene() as any;
+    navigationManager.teleportTo('hospital_lobby', true);
+    document.getElementById('btn-env-healthcare')?.classList.add('active');
+    document.getElementById('btn-env-corporate')?.classList.remove('active');
+  });
+
 
   // 17. Start Rendering Loop
   sceneManager.start();

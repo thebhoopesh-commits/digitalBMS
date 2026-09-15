@@ -24,6 +24,7 @@ export interface ZoneBounds {
 }
 
 export const OFFICE_ZONES: Record<string, ZoneBounds> = {
+  // Primary BMS zones
   lobby: {
     id: 'lobby',
     name: 'lobby',
@@ -50,6 +51,52 @@ export const OFFICE_ZONES: Record<string, ZoneBounds> = {
     spawnPosition: new THREE.Vector3(12.0, 1.6, -1.5),
     spawnYaw: Math.PI,
     bounds: new THREE.Box3(new THREE.Vector3(5.0, 0, -13.0), new THREE.Vector3(20.0, 4.0, 0.0))
+  },
+  // Backward-compatible architectural sub-zones for audits
+  entrance: {
+    id: 'lobby',
+    name: 'entrance',
+    displayName: 'Main Entrance Doorway',
+    center: new THREE.Vector3(0.0, 0.0, 11.0),
+    spawnPosition: new THREE.Vector3(0.0, 1.6, 11.0),
+    spawnYaw: 0.0,
+    bounds: new THREE.Box3(new THREE.Vector3(-5.0, 0, 8.0), new THREE.Vector3(5.0, 4.0, 13.0))
+  },
+  reception: {
+    id: 'lobby',
+    name: 'reception',
+    displayName: 'Reception Desk & Waiting Area',
+    center: new THREE.Vector3(-7.0, 0.0, 6.5),
+    spawnPosition: new THREE.Vector3(-7.0, 1.6, 7.0),
+    spawnYaw: 0.0,
+    bounds: new THREE.Box3(new THREE.Vector3(-20.0, 0, 0.0), new THREE.Vector3(0.0, 4.0, 13.0))
+  },
+  workstations: {
+    id: 'open_office',
+    name: 'workstations',
+    displayName: 'Open Office Workstation Pods',
+    center: new THREE.Vector3(-7.0, 0.0, -6.5),
+    spawnPosition: new THREE.Vector3(-7.0, 1.6, -1.0),
+    spawnYaw: 0.0,
+    bounds: new THREE.Box3(new THREE.Vector3(-20.0, 0, -13.0), new THREE.Vector3(5.0, 4.0, 0.0))
+  },
+  conference: {
+    id: 'conference_room',
+    name: 'conference',
+    displayName: 'Executive Conference Room',
+    center: new THREE.Vector3(12.0, 0.0, -6.5),
+    spawnPosition: new THREE.Vector3(12.0, 1.6, -1.5),
+    spawnYaw: Math.PI,
+    bounds: new THREE.Box3(new THREE.Vector3(5.0, 0, -13.0), new THREE.Vector3(20.0, 4.0, 0.0))
+  },
+  lounge: {
+    id: 'lobby',
+    name: 'lounge',
+    displayName: 'Staff Lounge & Kitchenette',
+    center: new THREE.Vector3(10.0, 0.0, 6.5),
+    spawnPosition: new THREE.Vector3(10.0, 1.6, 7.0),
+    spawnYaw: 0.0,
+    bounds: new THREE.Box3(new THREE.Vector3(0.0, 0, 0.0), new THREE.Vector3(20.0, 4.0, 13.0))
   }
 };
 

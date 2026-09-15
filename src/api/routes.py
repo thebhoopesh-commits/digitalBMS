@@ -38,6 +38,7 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="Short-term dialogue history for multi-turn context (role/content)"
     )
+    environment_id: str = Field(default="corporate", description="Contextual 3D environment ID")
 
 
 class ChatResponse(BaseModel):
@@ -191,7 +192,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             fallback_to_mock=False,
         )
         
-        prompt = build_full_prompt(body.message)
+        prompt = build_full_prompt(body.message, environment_id=body.environment_id)
         full_text = ""
         is_json_part = False
         yielded_len = 0

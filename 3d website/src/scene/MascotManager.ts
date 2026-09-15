@@ -134,5 +134,9 @@ export class MascotManager {
       }
     }
   }
+
+  public setPosition(pos: THREE.Vector3): void {
+    this.mascotGroup.position.set(pos.x, pos.y, pos.z);
+  }
 }
 
