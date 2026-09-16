@@ -118,6 +118,11 @@ async function bootstrap() {
       minimapContainer?.classList.add('hidden');
       if (hudFooter) hudFooter.style.display = 'none';
       if (reticle) reticle.classList.add('hidden');
+      document.getElementById('chat-drawer')?.classList.add('hidden');
+      document.getElementById('time-drawer')?.classList.add('hidden');
+      document.getElementById('settings-drawer')?.classList.add('hidden');
+      document.getElementById('activity-drawer')?.classList.add('hidden');
+      document.getElementById('tv-dashboard-overlay')?.classList.add('hidden');
       document.exitPointerLock?.();
     } else {
       operationsView.setVisible(false);
@@ -352,6 +357,11 @@ async function bootstrap() {
 
   // 13. Keyboard Controls & Shortcuts
   window.addEventListener('keydown', (e) => {
+    // When in operations view, do not handle 3D HUD hotkeys (like 'C' for 3D chat or 'T' for time)
+    if (currentViewMode === 'operations') {
+      return;
+    }
+
     // If chat drawer is open, intercept all keys so the user doesn't accidentally trigger hotkeys
     // when the chat input loses focus.
     if (chatManager.isDrawerOpen()) {
@@ -429,7 +439,7 @@ async function bootstrap() {
         break;
       case 'x':
       case 'X':
-        switchViewMode(currentViewMode === 'operations' ? '3d' : 'operations');
+        switchViewMode('operations');
         break;
     }
   });
