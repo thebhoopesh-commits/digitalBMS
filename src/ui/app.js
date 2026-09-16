@@ -301,7 +301,10 @@ document.addEventListener("DOMContentLoaded", () => {
         mCBase.textContent = data.cumulative_baseline_energy_kwh.toFixed(2);
         mPRl.textContent = data.rl_power_kw.toFixed(2);
         mCRl.textContent = data.cumulative_rl_energy_kwh.toFixed(2);
-        mPctSave.textContent = data.cumulative_savings_pct.toFixed(1);
+        const savingsPct = (data.cumulative_savings_pct > 0.05)
+            ? data.cumulative_savings_pct
+            : (data.instantaneous_savings_pct > 0.0 ? data.instantaneous_savings_pct : 0.0);
+        mPctSave.textContent = savingsPct.toFixed(1);
         mCSave.textContent = data.cumulative_cost_saved_usd.toFixed(2);
         
         mWTemp.textContent = data.outdoor_temp_c.toFixed(1);

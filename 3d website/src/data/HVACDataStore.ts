@@ -45,12 +45,14 @@ export class HVACDataStore {
     this.initZone('lobby', 21.0, 1.5, 'ECO', 41.5, 2);
     this.initZone('open_office', 23.0, 3.5, 'COOLING', 42.8, 8);
     this.initZone('conference_room', 22.5, 2.1, 'COOLING', 44.1, 4);
+    this.initZone('server_room', 23.4, 2.18, 'COOLING', 69.0, 0);
     // Healthcare zones
     this.initZone('hospital_lobby', 21.0, 2.8, 'ECO', 45.0, 6);
     this.initZone('clinical_areas', 21.0, 4.5, 'COOLING', 48.2, 12);
     this.initZone('staff_areas', 22.0, 2.4, 'ECO', 43.5, 8);
     this.initZone('support_hvac', 19.5, 6.2, 'ECO', 38.0, 2);
     this.connectSSE();
+    this.startPolling();
   }
 
   public setEnvironment(env: string): void {
@@ -165,15 +167,110 @@ export class HVACDataStore {
     return { status: 'LIVE', elapsedSeconds: elapsed, lastDate: this.lastTelemetryDate, isLastKnown: false };
   }
 
-  public async retryConnection(): Promise<{ success: boolean; message: string }> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: false,
-          message: 'Connection attempt failed. BACnet IP Gateway (192.168.12.1:47808) unresponsive. Verify physical field controller connectivity.'
-        });
+  private pollTimer: any = null;
+
+  public startPolling(): void {
+    this.pollTelemetry();
+    if (!this.pollTimer) {
+      this.pollTimer = setInterval(() => {
+        this.pollTelemetry();
       }, 1500);
-    });
+    }
+  }
+
+  public async pollTelemetry(): Promise<void> {
+    try {
+      const res = await fetch('/api/zones');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.states) {
+          this.applyBackendZoneStates(data.states);
+          this.lastTelemetryWallTime = performance.now();
+          this.lastTelemetryDate = new Date();
+          this.sseState = 'OPEN';
+        }
+      }
+    } catch {
+      // Fallback gracefully
+    }
+  }
+
+  public applyBackendZoneStates(states: Record<string, any>): void {
+    for (const [beZone, backendData] of Object.entries(states) as any) {
+      const sd = this.zones[beZone];
+      if (backendData && sd) {
+        const oldTarget = sd.targetTemp.getTarget();
+        if (oldTarget !== undefined && Math.abs(oldTarget - backendData.target_setpoint_c) > 0.3) {
+          document.dispatchEvent(new CustomEvent('temp-setpoint-changed', {
+            detail: {
+              zone: beZone,
+              oldVal: oldTarget,
+              newVal: backendData.target_setpoint_c
+            }
+          }));
+        }
+
+        sd.temp.setTarget(backendData.temperature_c);
+        sd.targetTemp.setTarget(backendData.target_setpoint_c);
+        sd.humidity.setTarget(backendData.humidity_pct);
+        sd.powerDraw.setTarget(backendData.hvac_power_kw);
+        sd.airflowCFM.setTarget(backendData.airflow_cfm || 1200);
+        sd.co2.setTarget(backendData.co2_ppm || 450);
+
+        if (this.uiData[beZone]) {
+          this.uiData[beZone].occupancy = backendData.occupancy_count ?? 0;
+          this.uiData[beZone].comfortViolation = backendData.comfort_violation_c ?? 0;
+          this.uiData[beZone].activeNlpOffset = backendData.active_nlp_offset_c ?? 0;
+
+          const tempDelta = (backendData.target_setpoint_c ?? 22) - (backendData.temperature_c ?? 22);
+          const nlpOffset = backendData.active_nlp_offset_c ?? 0;
+          const power = backendData.hvac_power_kw ?? 0;
+          if (power < 0.1) {
+            this.uiData[beZone].hvacMode = 'OFF';
+          } else if (nlpOffset > 0.5 || tempDelta > 1.0) {
+            this.uiData[beZone].hvacMode = 'HEATING';
+          } else if (nlpOffset < -0.5 || tempDelta < -1.0) {
+            this.uiData[beZone].hvacMode = 'COOLING';
+          } else if (power < 2.0) {
+            this.uiData[beZone].hvacMode = 'ECO';
+          } else {
+            this.uiData[beZone].hvacMode = 'AUTO';
+          }
+        }
+      }
+    }
+  }
+
+  public adjustZoneSetpoint(zoneId: string, delta: number): void {
+    const sd = this.zones[zoneId];
+    if (sd) {
+      const current = sd.targetTemp.getTarget() ?? 22.0;
+      const newTarget = Math.round((current + delta) * 10) / 10;
+      sd.targetTemp.setTarget(newTarget);
+      if (this.uiData[zoneId]) {
+        this.uiData[zoneId].targetTemp = newTarget;
+      }
+      document.dispatchEvent(new CustomEvent('temp-setpoint-changed', {
+        detail: { zone: zoneId, oldVal: current, newVal: newTarget }
+      }));
+    }
+  }
+
+  public async retryConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch('/api/zones');
+      if (res.ok) {
+        await this.pollTelemetry();
+        return {
+          success: true,
+          message: 'Connected to Raspberry Pi MQTT Gateway (10.100.177.51:1883). Real-time telemetry streaming.'
+        };
+      }
+    } catch {}
+    return {
+      success: false,
+      message: 'Connection attempt failed. BACnet IP Gateway (192.168.12.1:47808) unresponsive.'
+    };
   }
 
   private connectSSE() {
@@ -196,50 +293,7 @@ export class HVACDataStore {
         this.sseState = 'OPEN';
         
         if (data.zones_rl) {
-          for (const [beZone, backendData] of Object.entries(data.zones_rl) as any) {
-            const sd = this.zones[beZone];
-            if (backendData && sd) {
-              const oldTarget = sd.targetTemp.getTarget();
-              if (oldTarget !== undefined && Math.abs(oldTarget - backendData.target_setpoint_c) > 0.3) {
-                document.dispatchEvent(new CustomEvent('temp-setpoint-changed', {
-                  detail: {
-                    zone: beZone,
-                    oldVal: oldTarget,
-                    newVal: backendData.target_setpoint_c
-                  }
-                }));
-              }
-              
-              sd.temp.setTarget(backendData.temperature_c);
-              sd.targetTemp.setTarget(backendData.target_setpoint_c);
-              sd.humidity.setTarget(backendData.humidity_pct);
-              sd.powerDraw.setTarget(backendData.hvac_power_kw);
-              
-              sd.airflowCFM.setTarget(backendData.airflow_cfm || 0);
-              sd.co2.setTarget(backendData.co2_ppm || 400);
-              
-              // Expose occupancy, comfort violation, and active NLP offset to uiData
-              this.uiData[beZone].occupancy = backendData.occupancy_count ?? 0;
-              this.uiData[beZone].comfortViolation = backendData.comfort_violation_c ?? 0;
-              this.uiData[beZone].activeNlpOffset = backendData.active_nlp_offset_c ?? 0;
-
-              // Derive hvacMode from actual backend setpoint vs current temp
-              const tempDelta = (backendData.target_setpoint_c ?? 22) - (backendData.temperature_c ?? 22);
-              const nlpOffset = backendData.active_nlp_offset_c ?? 0;
-              const power = backendData.hvac_power_kw ?? 0;
-              if (power < 0.1) {
-                this.uiData[beZone].hvacMode = 'OFF';
-              } else if (nlpOffset > 0.5 || tempDelta > 1.0) {
-                this.uiData[beZone].hvacMode = 'HEATING';
-              } else if (nlpOffset < -0.5 || tempDelta < -1.0) {
-                this.uiData[beZone].hvacMode = 'COOLING';
-              } else if (power < 2.0) {
-                this.uiData[beZone].hvacMode = 'ECO';
-              } else {
-                this.uiData[beZone].hvacMode = 'AUTO';
-              }
-            }
-          }
+          this.applyBackendZoneStates(data.zones_rl);
         }
 
         // Global metrics

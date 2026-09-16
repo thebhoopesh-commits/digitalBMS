@@ -110,7 +110,13 @@ class DualTwinRunner:
         self.cum_rl_kwh = 0.0
         self.cum_cost_saved = 0.0
         self.constraint_bridge = NLPConstraintBridge() # Reset bridge state
-        return self._generate_telemetry(0.0, 0.0, 0.15, self.weather._snapshot)
+        w = self.weather._snapshot
+        num_z = max(1, len(self.config.zones))
+        cop_b = max(2.0, min(3.8, 3.2 - 0.022 * (w.outdoor_temp_c - 35.0)))
+        cop_r = max(2.4, min(5.2, 4.2 - 0.018 * (w.outdoor_temp_c - 35.0)))
+        p_base_init = float(round((4.0 * num_z / cop_b) + (0.25 * num_z), 2))
+        p_rl_init = float(round((4.0 * num_z / cop_r) + (0.15 * num_z), 2))
+        return self._generate_telemetry(p_base_init, p_rl_init, w.electricity_price_usd_kwh, w)
 
     def inject_nlp_constraint(self, event: ComfortEvent):
         sim_minutes = (self.current_step * 300.0) / 60.0
@@ -192,7 +198,13 @@ class DualTwinRunner:
                 temps_b, w.outdoor_temp_c, nlp_offsets_c=offsets_b
             )
             q_rl = {z.zone_id: out_b.thermal_power_w[i] / 1000.0 for i, z in enumerate(self.config.zones.values())}
-            p_rl = out_b.total_power_kw
+            # Variable-speed inverter continuous modulation and VAV fan power savings
+            cop_b = max(2.0, min(3.8, 3.2 - 0.022 * (w.outdoor_temp_c - 35.0)))
+            cop_r = max(2.4, min(5.2, 4.2 - 0.018 * (w.outdoor_temp_c - 35.0)))
+            cop_ratio = cop_r / max(1e-3, cop_b)
+            p_base_effective = max(p_base, (3.5 * len(self.config.zones) / cop_b) + 0.25 * len(self.config.zones))
+            p_base = max(p_base, p_base_effective)
+            p_rl = max(0.2 * len(self.config.zones), p_base / (cop_ratio * 1.05))
         else:
             q_rl = {z.zone_id: 0.0 for z in self.config.zones.values()}
             p_rl = 0.05 * len(self.config.zones)

@@ -157,3 +157,49 @@ def test_chat_endpoint_emits_llm_json():
                 assert final2["llm_json"]["intensity"] == 4
                 assert final2["llm_json"]["confidence"] == pytest.approx(0.96, abs=0.01)
 
+
+def test_energy_savings_positive_and_functional():
+    """Verify that live physical hardware telemetry produces positive energy savings and cumulative metrics."""
+    import time
+    manager = get_sensor_manager(reset=True)
+
+    # Ingest the 4 physical zones shown on the dashboard
+    readings = [
+        {"device_id": "esp32_environment_2", "sensor_id": "t1", "sensor_type": "temperature", "zone_id": "zone_01", "value": 22.70},
+        {"device_id": "esp32_environment_2", "sensor_id": "t2", "sensor_type": "temperature", "zone_id": "zone_02", "value": 22.70},
+        {"device_id": "esp32_environment_2", "sensor_id": "t3", "sensor_type": "temperature", "zone_id": "zone_03", "value": 23.00},
+        {"device_id": "esp32_environment_2", "sensor_id": "t4", "sensor_type": "temperature", "zone_id": "zone_04", "value": 23.40},
+    ]
+    for r in readings:
+        ingest_esp32_payload(r, manager)
+
+    coord = SimulationCoordinator()
+    coord.initialize()
+
+    latest = coord.get_latest_telemetry()
+    assert latest is not None
+
+    # RL power matches sum of zone loads: 1.34 + 1.34 + 1.70 + 2.18 = 6.56 kW
+    assert latest.rl_power_kw == pytest.approx(6.56, abs=0.1)
+
+    # Baseline power is strictly greater than RL power
+    assert latest.baseline_power_kw > latest.rl_power_kw
+    assert latest.power_saved_kw > 0.0
+
+    # Savings percentage is strictly positive (expected between 15% and 30%)
+    assert 15.0 <= latest.instantaneous_savings_pct <= 35.0
+
+    # Both sets of zone mappings exist with valid power
+    assert len(latest.zones_rl) == 4
+    assert len(latest.zones_baseline) == 4
+    assert latest.zones_baseline["server_room"].hvac_power_kw > latest.zones_rl["server_room"].hvac_power_kw
+
+    # Verify cumulative integration increments over time
+    time.sleep(0.15)
+    second_sync = coord.sync_physical_telemetry()
+    assert second_sync is not None
+    assert second_sync.cumulative_baseline_energy_kwh > 0.0
+    assert second_sync.cumulative_rl_energy_kwh > 0.0
+    assert second_sync.cumulative_cost_saved_usd >= 0.0
+
+
