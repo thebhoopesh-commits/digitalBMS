@@ -208,10 +208,10 @@ export class OperationsView {
       this.isRetrying ? 1 : 0,
       this.retryResult ? (this.retryResult.show ? this.retryResult.message : 'hidden') : 'none',
       conn.status,
-      l ? l.temp.toFixed(1) : '21.0',
-      o ? o.temp.toFixed(1) : '23.0',
-      c ? c.temp.toFixed(1) : '22.5',
-      s ? s.temp.toFixed(1) : '23.4'
+      l ? `${l.temp.toFixed(1)}_${l.targetTemp.toFixed(1)}_${l.humidity.toFixed(0)}` : '21.0',
+      o ? `${o.temp.toFixed(1)}_${o.targetTemp.toFixed(1)}_${o.humidity.toFixed(0)}` : '23.0',
+      c ? `${c.temp.toFixed(1)}_${c.targetTemp.toFixed(1)}_${c.humidity.toFixed(0)}` : '22.5',
+      s ? `${s.temp.toFixed(1)}_${s.targetTemp.toFixed(1)}_${s.humidity.toFixed(0)}` : '23.4'
     ].join('|');
   }
 
@@ -352,7 +352,7 @@ export class OperationsView {
         this.render();
         if (this.isChatOpen) {
           setTimeout(() => {
-            const input = document.getElementById('ops-chat-input') as HTMLInputElement | null;
+            const input = (document.getElementById('ops-chat-input') || document.getElementById('ops-copilot-input')) as HTMLInputElement | null;
             input?.focus();
           }, 100);
         }
@@ -360,7 +360,7 @@ export class OperationsView {
       }
 
       // 9d. Close Copilot drawer
-      const closeCopilotBtn = target.closest('#btn-close-ops-copilot') as HTMLElement | null;
+      const closeCopilotBtn = target.closest('#btn-close-copilot, #btn-close-ops-copilot, .copilot-close-btn') as HTMLElement | null;
       if (closeCopilotBtn) {
         this.isChatOpen = false;
         this.render();
@@ -368,9 +368,9 @@ export class OperationsView {
       }
 
       // 9e. Quick prompt chip clicked in Copilot
-      const promptChip = target.closest('[data-ops-prompt]') as HTMLElement | null;
+      const promptChip = target.closest('[data-ops-prompt], [data-prompt], .copilot-chip') as HTMLElement | null;
       if (promptChip) {
-        const promptText = promptChip.getAttribute('data-ops-prompt');
+        const promptText = promptChip.getAttribute('data-ops-prompt') || promptChip.getAttribute('data-prompt');
         if (promptText) {
           this.sendOpsChatMessage(promptText);
         }
@@ -436,7 +436,7 @@ export class OperationsView {
       const form = (e.target as HTMLElement).closest('#ops-copilot-form');
       if (form) {
         e.preventDefault();
-        const input = document.getElementById('ops-chat-input') as HTMLInputElement | null;
+        const input = (document.getElementById('ops-chat-input') || document.getElementById('ops-copilot-input')) as HTMLInputElement | null;
         if (input && input.value.trim() && !this.isChatSending) {
           const val = input.value.trim();
           input.value = '';
