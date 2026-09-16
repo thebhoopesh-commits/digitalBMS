@@ -1778,7 +1778,7 @@ input:focus-visible {
   z-index: 150;
   display: flex;
   flex-direction: column;
-  animation: drawerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: drawerSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes drawerSlideIn {

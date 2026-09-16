@@ -369,6 +369,10 @@ export class OperationsView {
       const closeCopilotBtn = target.closest('#btn-close-copilot, #btn-close-ops-copilot, .copilot-close-btn') as HTMLElement | null;
       if (closeCopilotBtn) {
         this.isChatOpen = false;
+        const drawer = document.getElementById('ops-copilot-drawer');
+        if (drawer) {
+          drawer.remove();
+        }
         this.render();
         return;
       }
@@ -1408,8 +1412,9 @@ export class OperationsView {
           <span class="fab-badge font-mono">Qwen 1.7B</span>
         </button>
 
-        <!-- COPILOT DRAWER -->
-        <aside class="ops-copilot-drawer ${this.isChatOpen ? 'open' : ''}" id="ops-copilot-drawer">
+        <!-- COPILOT DRAWER (Conditionally rendered strictly when open) -->
+        ${this.isChatOpen ? `
+        <aside class="ops-copilot-drawer open" id="ops-copilot-drawer">
           <div class="ops-copilot-header">
             <div class="copilot-title-group">
               <span class="copilot-avatar">🤖</span>
@@ -1422,7 +1427,7 @@ export class OperationsView {
                 </div>
               </div>
             </div>
-            <button class="copilot-close-btn" id="btn-close-copilot" aria-label="Close Copilot">&times;</button>
+            <button class="copilot-close-btn" id="btn-close-copilot" aria-label="Close Copilot" title="Close Copilot">✕</button>
           </div>
 
           <!-- Message History -->
@@ -1432,9 +1437,9 @@ export class OperationsView {
 
           <!-- Quick Suggestion Prompts -->
           <div class="copilot-quick-prompts">
-            <button class="copilot-chip" data-prompt="What is the current temperature in all zones?">📊 Zone Status</button>
-            <button class="copilot-chip" data-prompt="Set open office temperature to 23 degrees">❄️ Set Open Office to 23°C</button>
-            <button class="copilot-chip" data-prompt="Diagnose sensor anomalies and power efficiency">⚡ Anomaly Check</button>
+            <button class="copilot-chip" data-ops-prompt="What is the current temperature in all zones?" data-prompt="What is the current temperature in all zones?">📊 Zone Status</button>
+            <button class="copilot-chip" data-ops-prompt="Set open office temperature to 23 degrees" data-prompt="Set open office temperature to 23 degrees">❄️ Set Open Office to 23°C</button>
+            <button class="copilot-chip" data-ops-prompt="Diagnose sensor anomalies and power efficiency" data-prompt="Diagnose sensor anomalies and power efficiency">⚡ Anomaly Check</button>
           </div>
 
           <!-- Chat Input -->
@@ -1442,7 +1447,7 @@ export class OperationsView {
             <input 
               type="text" 
               class="ops-copilot-input" 
-              id="ops-copilot-input" 
+              id="ops-chat-input" 
               placeholder="Ask Copilot or command HVAC setpoint..." 
               autocomplete="off"
               ${this.isChatSending ? 'disabled' : ''}
@@ -1452,6 +1457,7 @@ export class OperationsView {
             </button>
           </form>
         </aside>
+        ` : ''}
 
         <!-- MODALS / DRAWERS OVERLAY -->
         ${modalHtml}
