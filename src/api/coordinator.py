@@ -198,17 +198,93 @@ class SimulationCoordinator:
         return translation, applied
 
     # ------------------------------------------------------------------ #
-    # Telemetry snapshots
+    # Telemetry snapshots & Physical Sensor Sync
     # ------------------------------------------------------------------ #
+
+    def sync_physical_telemetry(self, telemetry: Optional[StepTelemetry] = None) -> Optional[StepTelemetry]:
+        """Overlays live physical sensor readings from SensorManager onto telemetry."""
+        from src.hardware.sensor_manager import get_sensor_manager
+        from src.hardware.models import Metric
+        from src.simulation.telemetry import ZoneTelemetry
+
+        target = telemetry or self.telemetry_buffer.get_latest() or self.runner.get_latest_telemetry()
+        if target is None:
+            return None
+
+        manager = get_sensor_manager()
+        fresh_zones = manager.zones_reporting(Metric.TEMPERATURE) + manager.zones_reporting(Metric.HUMIDITY)
+        if not fresh_zones:
+            return target
+
+        now_struct = time.localtime()
+        wall_clock_hour = float(now_struct.tm_hour + (now_struct.tm_min / 60.0) + (now_struct.tm_sec / 3600.0))
+
+        new_zones_rl: Dict[str, ZoneTelemetry] = dict(target.zones_rl)
+        new_zones_base: Dict[str, ZoneTelemetry] = dict(target.zones_baseline)
+
+        # Include all zones in target plus any reporting in SensorManager (e.g. server_room)
+        all_zone_ids = set(target.zones_rl.keys()) | set(manager.zones_reporting(Metric.TEMPERATURE))
+
+        for zid in all_zone_ids:
+            t_snap = manager.get(zid, Metric.TEMPERATURE)
+            h_snap = manager.get(zid, Metric.HUMIDITY)
+            occ_snap = manager.get(zid, Metric.OCCUPANCY)
+
+            prev_zt = target.zones_rl.get(zid)
+            t_c = t_snap.value if t_snap.has_value and not t_snap.stale else (prev_zt.temperature_c if prev_zt else 22.0)
+            h_pct = h_snap.value if h_snap.has_value and not h_snap.stale else (prev_zt.humidity_pct if prev_zt else 50.0)
+            occ = int(occ_snap.value) if occ_snap.has_value and not occ_snap.stale else (prev_zt.occupancy_count if prev_zt else 0)
+            sp = prev_zt.target_setpoint_c if prev_zt else 22.0
+            nlp_off = prev_zt.active_nlp_offset_c if prev_zt else 0.0
+
+            delta_t = abs(t_c - sp)
+            hvac_kw = max(0.2, min(5.0, 0.5 + delta_t * 1.2))
+            viol = max(0.0, 20.0 - t_c) + max(0.0, t_c - 24.0)
+
+            new_zt = ZoneTelemetry(
+                zone_id=zid,
+                temperature_c=float(round(t_c, 2)),
+                target_setpoint_c=float(round(sp, 2)),
+                humidity_pct=float(round(h_pct, 1)),
+                co2_ppm=prev_zt.co2_ppm if prev_zt else 400.0,
+                airflow_cfm=prev_zt.airflow_cfm if prev_zt else 800.0,
+                occupancy_count=occ,
+                hvac_power_kw=float(round(hvac_kw, 2)),
+                comfort_violation_c=float(round(viol, 2)),
+                active_nlp_offset_c=float(round(nlp_off, 2)),
+            )
+            new_zones_rl[zid] = new_zt
+            if zid in new_zones_base:
+                new_zones_base[zid] = new_zt
+
+        total_p_rl = sum(z.hvac_power_kw for z in new_zones_rl.values())
+        comp = self.runner.calculate_comparative_metrics(target.baseline_power_kw, total_p_rl)
+
+        updated = target.model_copy(update={
+            "timestamp_sim_hour": wall_clock_hour,
+            "rl_power_kw": float(round(total_p_rl, 2)),
+            "power_saved_kw": float(round(comp["power_saved_kw"], 2)),
+            "instantaneous_savings_pct": float(round(comp["instantaneous_savings_pct"], 1)),
+            "zones_rl": new_zones_rl,
+            "zones_baseline": new_zones_base,
+        })
+        return updated
+
+    def on_mqtt_reading(self, reading_result: Dict[str, Any]) -> None:
+        """Callback triggered when new MQTT sensor data is ingested."""
+        with self._lock:
+            synced = self.sync_physical_telemetry()
+            if synced is not None:
+                self.telemetry_buffer.append(synced)
+                self._broadcast(synced)
 
     def get_latest_telemetry(self) -> Optional[StepTelemetry]:
         if not self._is_initialized:
             return None
-        # Prefer buffer's most recent, falling back to runner.
-        latest = self.telemetry_buffer.get_latest()
+        latest = self.telemetry_buffer.get_latest() or self.runner.get_latest_telemetry()
         if latest is not None:
-            return latest
-        return self.runner.get_latest_telemetry()
+            return self.sync_physical_telemetry(latest)
+        return None
 
     def get_telemetry_history(self, limit: Optional[int] = None) -> List[StepTelemetry]:
         if not self._is_initialized:
@@ -303,25 +379,32 @@ class SimulationCoordinator:
     # ------------------------------------------------------------------ #
 
     def _worker_loop(self) -> None:
-        """Background loop: steps the simulator at speed-adjusted cadence."""
+        """Background loop: steps the simulator at speed-adjusted cadence or syncs physical telemetry."""
         try:
             while not self._stop_event.is_set():
                 if self._is_running:
                     try:
                         latest = self.runner.step()
                         if latest is not None:
+                            latest = self.sync_physical_telemetry(latest)
                             self.telemetry_buffer.append(latest)
                             self._broadcast(latest)
                     except Exception as exc:  # pragma: no cover - defensive
                         logger.exception("Worker step failed: %s", exc)
 
                     # Sleep inversely proportional to speed.
-                    # speed=1.0 -> sleep 1.0s (~1 step/sec)
-                    # speed=50.0 -> sleep 0.02s (~50 steps/sec)
                     sleep_s = 1.0 / max(0.1, self._speed)
                     self._stop_event.wait(timeout=sleep_s)
                 else:
-                    self._stop_event.wait(timeout=0.1)
+                    # In monitoring mode: periodically broadcast live physical readings
+                    try:
+                        synced = self.sync_physical_telemetry()
+                        if synced is not None:
+                            self.telemetry_buffer.append(synced)
+                            self._broadcast(synced)
+                    except Exception as exc:
+                        logger.debug("Periodic physical telemetry sync failed: %s", exc)
+                    self._stop_event.wait(timeout=1.0)
         finally:
             logger.info("Simulation worker exiting.")
 

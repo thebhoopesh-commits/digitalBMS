@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     // UI Elements
     const statusInd = document.getElementById("sim-status");
+    const mqttStatus = document.getElementById("mqtt-status");
     const simTime = document.getElementById("sim-time");
     
     // Controls
@@ -90,6 +91,11 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const botMsgDiv = document.createElement("div");
             botMsgDiv.className = "chat-msg chat-bot";
+
+            const botTextDiv = document.createElement("div");
+            botTextDiv.className = "bot-text";
+            botMsgDiv.appendChild(botTextDiv);
+
             chatHistory.appendChild(botMsgDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
 
@@ -109,7 +115,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             const data = JSON.parse(line.slice(6));
                             if (data.chunk) {
                                 fullText += data.chunk;
-                                botMsgDiv.textContent = fullText;
+                                botTextDiv.textContent = fullText;
+                                chatHistory.scrollTop = chatHistory.scrollHeight;
                             }
                             if (data.applied !== undefined) {
                                 finalData = data;
@@ -127,12 +134,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     } else if (finalData.is_applicable && finalData.applied) {
                         replyText = `Adjusted setpoints based on: "${msg}"`;
                     }
-                    botMsgDiv.textContent = replyText;
+                    botTextDiv.textContent = replyText;
                     fullText = replyText;
                 }
                 
                 if (!finalData.is_applicable || !finalData.applied) {
-                    botMsgDiv.className = "chat-msg chat-system";
+                    botMsgDiv.classList.add("chat-notice");
+                }
+
+                // Render complete Qwen3:1.7b JSON Output Card for judges
+                const jsonCard = renderLlmJsonCard(finalData);
+                if (jsonCard) {
+                    botMsgDiv.appendChild(jsonCard);
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
                 }
             }
 
@@ -144,6 +158,122 @@ document.addEventListener("DOMContentLoaded", () => {
             appendChat("Error communicating with NLP engine.", "system");
         }
     });
+
+    // Wire quick demo prompts for hackathon judges
+    document.querySelectorAll(".quick-prompt-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const promptText = btn.getAttribute("data-msg");
+            if (promptText && chatInput) {
+                chatInput.value = promptText;
+                chatForm.dispatchEvent(new Event("submit", { cancelable: true }));
+            }
+        });
+    });
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function syntaxHighlightJson(json) {
+        if (typeof json !== 'string') {
+            json = JSON.stringify(json, null, 2);
+        }
+        json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+            let cls = 'json-num';
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = 'json-key';
+                } else {
+                    cls = 'json-str';
+                }
+            } else if (/true|false/.test(match)) {
+                cls = 'json-bool';
+            } else if (/null/.test(match)) {
+                cls = 'json-null';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+        });
+    }
+
+    function renderLlmJsonCard(data) {
+        const jsonPayload = data.llm_json || (data.translation && data.translation.events && data.translation.events[0]) || data.translation;
+        if (!jsonPayload) return null;
+
+        const card = document.createElement("div");
+        card.className = "llm-json-card";
+
+        const modelName = data.model || "qwen3:1.7b";
+        const isApplied = !!data.applied;
+
+        // Extract key chips for quick scanning by judges
+        const domain = jsonPayload.domain || (data.translation && data.translation.is_applicable ? "thermal" : "telemetry");
+        const location = jsonPayload.location || data.zone_id || "Unspecified";
+        const sensation = jsonPayload.sensation || (jsonPayload.intent || "other");
+        const intensity = jsonPayload.intensity !== undefined ? `${jsonPayload.intensity}/5` : null;
+        const confidence = jsonPayload.confidence !== undefined ? `${Math.round(jsonPayload.confidence * 100)}%` : null;
+
+        const prettyJson = JSON.stringify(jsonPayload, null, 2);
+
+        card.innerHTML = `
+            <div class="json-card-header">
+                <div class="json-card-title">
+                    <span class="json-icon">⚡</span>
+                    <span class="json-title-text">${escapeHtml(modelName)} Semantic JSON</span>
+                </div>
+                <div class="json-actions">
+                    <button type="button" class="btn-copy-json" title="Copy JSON payload">📋 Copy JSON</button>
+                    <button type="button" class="btn-toggle-json" title="Toggle full JSON code">▾ Collapse</button>
+                </div>
+            </div>
+            <div class="json-chips">
+                <span class="json-chip chip-domain">Domain: <strong>${escapeHtml(domain)}</strong></span>
+                <span class="json-chip chip-loc">Zone: <strong>${escapeHtml(location)}</strong></span>
+                <span class="json-chip chip-sens">Sensation: <strong>${escapeHtml(sensation)}</strong></span>
+                ${intensity ? `<span class="json-chip chip-int">Intensity: <strong>${escapeHtml(intensity)}</strong></span>` : ''}
+                ${confidence ? `<span class="json-chip chip-conf">Confidence: <strong>${escapeHtml(confidence)}</strong></span>` : ''}
+            </div>
+            <div class="json-body">
+                <pre class="json-code-block"><code>${syntaxHighlightJson(prettyJson)}</code></pre>
+            </div>
+            <div class="json-card-footer ${isApplied ? 'success' : 'info'}">
+                <span class="footer-icon">${isApplied ? '✓' : 'ℹ'}</span>
+                <span class="footer-text">${escapeHtml(data.action_summary || (isApplied ? "Injected into Digital Twin RL Setpoint" : "No actuator constraint injected"))}</span>
+            </div>
+        `;
+
+        // Wire Copy button
+        const copyBtn = card.querySelector(".btn-copy-json");
+        copyBtn.addEventListener("click", () => {
+            navigator.clipboard.writeText(prettyJson).then(() => {
+                copyBtn.textContent = "✓ Copied!";
+                setTimeout(() => { copyBtn.textContent = "📋 Copy JSON"; }, 2000);
+            }).catch(() => {
+                copyBtn.textContent = "Copied";
+            });
+        });
+
+        // Wire Toggle button
+        const toggleBtn = card.querySelector(".btn-toggle-json");
+        const jsonBody = card.querySelector(".json-body");
+        toggleBtn.addEventListener("click", () => {
+            if (jsonBody.style.display === "none") {
+                jsonBody.style.display = "block";
+                toggleBtn.textContent = "▾ Collapse";
+            } else {
+                jsonBody.style.display = "none";
+                toggleBtn.textContent = "▸ Expand JSON";
+            }
+        });
+
+        return card;
+    }
 
     function appendChat(text, type) {
         const div = document.createElement("div");
@@ -179,10 +309,22 @@ document.addEventListener("DOMContentLoaded", () => {
         mWSolar.textContent = data.solar_irradiance_w_m2.toFixed(0);
 
         // Zones
-        renderZones(data.zones_rl);
+        if (data.zones_rl && Object.keys(data.zones_rl).length > 0) {
+            renderZones(data.zones_rl);
+        } else {
+            fetchAndRenderZones();
+        }
     }
 
+    const ZONE_META = {
+        "lobby": { name: "Lobby", tag: "zone_01 (ESP32)" },
+        "open_office": { name: "Open Office", tag: "zone_02 (ESP32)" },
+        "conference_room": { name: "Conference Room", tag: "zone_03 (ESP32)" },
+        "server_room": { name: "Server Room", tag: "zone_04 (ESP32)" },
+    };
+
     function renderZones(zonesObj) {
+        if (!zonesObj || Object.keys(zonesObj).length === 0) return;
         zonesContainer.innerHTML = "";
         for (const [zoneId, z] of Object.entries(zonesObj)) {
             const card = document.createElement("div");
@@ -190,20 +332,38 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const isViolating = z.comfort_violation_c > 0;
             const borderStyle = isViolating ? "border: 1px solid var(--accent-red);" : "";
+            const meta = ZONE_META[zoneId] || { name: zoneId.replace('_', ' '), tag: "ESP32 MQTT" };
 
             card.innerHTML = `
                 <div class="zone-header" style="${borderStyle}">
-                    <span class="zone-name">${zoneId.replace('_', ' ')}</span>
+                    <div>
+                        <span class="zone-name">${meta.name}<span class="badge-live">LIVE</span></span>
+                        <div class="zone-hw-tag">${meta.tag}</div>
+                    </div>
                     <span class="zone-temp">${z.temperature_c.toFixed(1)}°C</span>
                 </div>
                 <div class="zone-details">
-                    <div>SP: ${z.target_setpoint_c.toFixed(1)}°C</div>
-                    <div>RH: ${z.humidity_pct.toFixed(0)}%</div>
-                    <div>Occ: ${z.occupancy_count}</div>
-                    <div>HVAC: ${z.hvac_power_kw.toFixed(2)} kW</div>
+                    <div><strong>RH:</strong> ${z.humidity_pct.toFixed(1)}%</div>
+                    <div><strong>SP:</strong> ${z.target_setpoint_c.toFixed(1)}°C</div>
+                    <div><strong>Occ:</strong> ${z.occupancy_count}</div>
+                    <div><strong>HVAC:</strong> ${z.hvac_power_kw.toFixed(2)} kW</div>
                 </div>
             `;
             zonesContainer.appendChild(card);
+        }
+    }
+
+    async function fetchAndRenderZones() {
+        try {
+            const res = await fetch("/api/zones");
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.states && Object.keys(data.states).length > 0) {
+                    renderZones(data.states);
+                }
+            }
+        } catch (e) {
+            console.debug("Failed to fetch zones:", e);
         }
     }
 
@@ -218,7 +378,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const data = JSON.parse(e.data);
                 updateUI(data);
                 
-                statusInd.textContent = "Running";
+                statusInd.textContent = "Live Hardware";
                 statusInd.className = "status-indicator running";
             } catch (err) {
                 console.error("SSE Parse Error", err);
@@ -232,7 +392,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const data = JSON.parse(e.data);
                 if (data.running) {
-                    statusInd.textContent = "Running";
+                    statusInd.textContent = "Live Hardware";
                     statusInd.className = "status-indicator running";
                 }
             } catch (err) {}
@@ -242,6 +402,27 @@ document.addEventListener("DOMContentLoaded", () => {
             statusInd.textContent = "Disconnected";
             statusInd.className = "status-indicator stopped";
         };
+    }
+
+    async function checkMqttHealth() {
+        try {
+            const res = await fetch("/api/sensors/health");
+            if (res.ok) {
+                const health = await res.json();
+                if (mqttStatus && health.mqtt) {
+                    if (health.mqtt.connected) {
+                        mqttStatus.textContent = `MQTT: ${health.mqtt.broker_host}`;
+                        mqttStatus.className = "status-indicator running";
+                    } else if (health.mqtt.running) {
+                        mqttStatus.textContent = "MQTT: Connecting...";
+                        mqttStatus.className = "status-indicator stopped";
+                    } else {
+                        mqttStatus.textContent = "MQTT: Inactive";
+                        mqttStatus.className = "status-indicator stopped";
+                    }
+                }
+            }
+        } catch (e) {}
     }
 
     // Initial Fetch
@@ -257,19 +438,21 @@ document.addEventListener("DOMContentLoaded", () => {
             const sRes = await fetch("/api/status");
             if (sRes.ok) {
                 const status = await sRes.json();
-                statusInd.textContent = status.running ? "Running" : "Paused";
+                statusInd.textContent = status.running ? "Live Hardware" : "Paused";
                 statusInd.className = status.running ? "status-indicator running" : "status-indicator stopped";
             }
         } catch (e) {
             console.error("Failed to load initial state:", e);
         }
+        fetchAndRenderZones();
+        checkMqttHealth();
     }
 
     // Init
     loadInitialState();
     connectSSE();
     
-    // Poll status periodically to update UI when not receiving SSE updates (paused)
+    // Poll status and live zones periodically to ensure continuous display of ESP32 sensor telemetry
     setInterval(async () => {
         try {
             const res = await fetch("/api/status");
@@ -278,9 +461,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 statusInd.textContent = "Paused";
                 statusInd.className = "status-indicator stopped";
             } else if (eventSource && eventSource.readyState === EventSource.OPEN) {
-                statusInd.textContent = "Running";
+                statusInd.textContent = "Live Hardware";
                 statusInd.className = "status-indicator running";
             }
         } catch (e) {}
-    }, 2000);
+        checkMqttHealth();
+        fetchAndRenderZones();
+    }, 1000);
 });

@@ -416,6 +416,34 @@ FEW_SHOT_EXAMPLES = [
     }
 ]
 
+def ground_block(states: Optional[Dict[str, Any]] = None) -> str:
+    """Build a compact, authoritative live-building snapshot for grounding.
+    Used as an inline prompt block so the LLM answers ONLY from live data.
+    Returns empty string if no states (falls back safely)."""
+    if not states:
+        return ("LIVE BUILDING CONTEXT: no live sensor data available. "
+                "Answer open-ended questions from general knowledge; for any "
+                "factual metric reply UNKNOWN.")
+    rows = []
+    for z, s in (states.items() if isinstance(states, dict) else []):
+        try:
+            rows.append(
+                f"{z}: temp={float(s.get('temperature_c', 0)):.1f}C "
+                f"setpoint={float(s.get('target_setpoint_c', 0)):.1f}C "
+                f"rh={float(s.get('humidity_pct', 0)):.0f}% "
+                f"occ={int(s.get('occupancy_count', 0))}"
+            )
+        except (TypeError, ValueError):
+            continue
+    body = "\n".join(rows) if rows else "No zone data available."
+    return (
+        "LIVE BUILDING CONTEXT (authoritative current sensor values — "
+        "answer ONLY from these lines; never invent numbers):\n" + body +
+        "\nRules: factual questions → value above or UNKNOWN; "
+        "narrative/open-ended → use context above; DO NOT guess."
+    )
+
+
 COMFORT_EVENT_JSON_SCHEMA = {
     "type": "object",
     "properties": {
@@ -640,7 +668,7 @@ class OllamaBackend(BaseInferenceBackend):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
-            "format": "json",
+            "format": COMFORT_EVENT_JSON_SCHEMA,
             "stream": False,
             "think": False,
             "options": {
@@ -712,6 +740,63 @@ class OllamaBackend(BaseInferenceBackend):
         except Exception as e:
             logger.error(f"Ollama streaming failed: {e}")
             raise RuntimeError(f"Ollama streaming failed at {self.base_url}: {e}") from e
+
+    async def generate_stream_async(
+        self, prompt: str, grammar: Optional[str] = None,
+        first_token_timeout_s: float = 6.0, total_timeout_s: float = 60.0,
+        **kwargs: Any
+    ) -> Any:
+        """F4-B: Native async stream using httpx (httpx is in requirements.txt).
+        Enables cancellation, per-phase timeouts, and no thread hop.
+        Returns an async generator of chunk strings."""
+        try:
+            import httpx, asyncio
+        except ImportError:  # graceful fall back to sync + threadpool
+            logger.warning("httpx unavailable; falling back to sync stream (use iterate_in_threadpool)")
+            for chunk in self.generate_stream(prompt, grammar=grammar, **kwargs):
+                yield chunk
+            return
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": True,
+            "think": False,
+            "format": COMFORT_EVENT_JSON_SCHEMA,
+            "options": {
+                "temperature": kwargs.get("temperature", 0.1),
+                "num_predict": kwargs.get("max_tokens", 96),
+                "num_ctx": kwargs.get("num_ctx", 2048),  # F3: larger context
+                "num_thread": kwargs.get("num_threads", 4),
+                "keep_alive": self.extra_options.get("keep_alive", "30m"),
+                **{k: v for k, v in self.extra_options.items() if k != "keep_alive"},
+            }
+        }
+        # First-token timeout (fails fast on stalled Pi)
+        async with asyncio.timeout(first_token_timeout_s):
+            async with httpx.AsyncClient(timeout=httpx.Timeout(total_timeout_s)) as client:
+                async with client.stream(
+                    "POST", f"{self.base_url}/api/chat",
+                    json=payload, headers={"Content-Type": "application/json"}
+                ) as response:
+                    response.raise_for_status()
+                    first_token_received = False
+                    async for line in response.aiter_lines():
+                        if not first_token_received:
+                            first_token_received = True
+                        if line:
+                            try:
+                                chunk_data = json.loads(line)
+                                msg = chunk_data.get("message", {})
+                                chunk_content = msg.get("content", "")
+                                if chunk_content:
+                                    yield chunk_content
+                            except Exception:
+                                # Ignore malformed line; keep streaming
+                                continue
 
     def _fallback_generate_api(self, prompt: str, **kwargs: Any) -> str:
         """Fallback querying /api/generate for older Ollama versions."""

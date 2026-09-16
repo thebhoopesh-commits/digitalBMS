@@ -25,6 +25,18 @@ ALLOWED_ZONE_IDS: Set[str] = {
 
 # Alias mapping for normalizing occupant and LLM zone references to canonical zone identifiers
 ZONE_ALIAS_MAP: Dict[str, str] = {
+    "zone_01": "lobby",
+    "zone_1": "lobby",
+    "zone1": "lobby",
+    "zone_02": "open_office",
+    "zone_2": "open_office",
+    "zone2": "open_office",
+    "zone_03": "conference_room",
+    "zone_3": "conference_room",
+    "zone3": "conference_room",
+    "zone_04": "server_room",
+    "zone_4": "server_room",
+    "zone4": "server_room",
     "lobby": "lobby",
     "entrance": "lobby",
     "foyer": "lobby",

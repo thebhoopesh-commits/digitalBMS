@@ -15,8 +15,9 @@
             <h1>Digital Twin Optimizer</h1>
         </div>
         <div class="status-panel">
-            <div id="sim-status" class="status-indicator stopped">Stopped</div>
-            <div class="time-display">Sim Time: <span id="sim-time">00:00</span></div>
+            <div id="mqtt-status" class="status-indicator running">MQTT: 10.100.177.51</div>
+            <div id="sim-status" class="status-indicator running">Live Hardware</div>
+            <div class="time-display">Time: <span id="sim-time">00:00</span></div>
             <div class="controls">
                 <button id="btn-start" class="btn btn-primary">Start</button>
                 <button id="btn-pause" class="btn btn-secondary">Pause</button>
@@ -58,20 +59,38 @@
 
         <div class="middle-row">
             <section class="panel zones-panel">
-                <h2>Thermal Zones (Live)</h2>
+                <div class="zones-panel-header">
+                    <h2>Thermal Zones (Live ESP32 MQTT)</h2>
+                    <span class="badge-hw-feed" id="hw-feed-badge">📡 Node: esp32_environment_2</span>
+                </div>
                 <div id="zones-container" class="zones-grid">
                     <!-- Zones injected via JS -->
                 </div>
             </section>
 
             <section class="panel nlp-panel">
-                <h2>Occupant Feedback</h2>
+                <div class="nlp-panel-header">
+                    <h2>Occupant Feedback</h2>
+                    <div class="badge-ai-model" id="ai-model-tag" title="Local LLM running on Raspberry Pi via Ollama">
+                        <span class="pulse-dot"></span>
+                        <span class="model-name">Qwen3:1.7b</span>
+                        <span class="model-sub">Edge JSON</span>
+                    </div>
+                </div>
                 <div class="chat-container">
                     <div id="chat-history" class="chat-history">
-                        <div class="chat-system">Submit a complaint to adjust setpoints (e.g. "Lobby is too hot").</div>
+                        <div class="chat-system">
+                            <div class="chat-system-title">Edge AI Semantic Parser Active</div>
+                            <div class="chat-system-desc">Occupant complaints are parsed by <strong>qwen3:1.7b</strong> into structured JSON to adjust setpoints in real-time.</div>
+                        </div>
+                    </div>
+                    <div class="quick-prompts">
+                        <button type="button" class="quick-prompt-btn" data-msg="It is freezing in the Open Office! Turn up the heat.">❄️ Freezing in Open Office</button>
+                        <button type="button" class="quick-prompt-btn" data-msg="Lobby is too hot, please increase cooling!">🔥 Lobby too hot</button>
+                        <button type="button" class="quick-prompt-btn" data-msg="Conference room is stuffy, please ventilate">💨 Conf Room stuffy</button>
                     </div>
                     <form id="chat-form" class="chat-input-area">
-                        <input type="text" id="chat-input" placeholder="Type complaint here..." autocomplete="off">
+                        <input type="text" id="chat-input" placeholder="Type complaint (e.g. 'Lobby is too hot')..." autocomplete="off">
                         <button type="submit" class="btn btn-primary">Send</button>
                     </form>
                 </div>

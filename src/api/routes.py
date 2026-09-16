@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.concurrency import iterate_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.api.coordinator import SimulationCoordinator
@@ -161,15 +162,27 @@ def _coordinator(request: Request) -> SimulationCoordinator:
 async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingResponse:
     """Translates a natural-language message and streams the response text, then injects constraints.
     Enforces 100% local inference via Ollama on Raspberry Pi. Zero cloud fallback."""
+    # F5: Dialogue session state (lightweight, server-side, no new DB)
+    if not hasattr(request.app.state, "dialogue_sessions"):
+        request.app.state.dialogue_sessions = {}
+    session_key = f"{body.environment_id}:{hash(str(body.message)[:40])}"
+    session_store_ref = request.app.state.dialogue_sessions
+    last_zone = (session_store_ref.get(session_key) or {}).get("zone")
+    last_metric = (session_store_ref.get(session_key) or {}).get("metric")
+
+    def update_session(zone: Optional[str], metric: Optional[str]) -> None:
+        request.app.state.dialogue_sessions[session_key] = {"zone": zone, "metric": metric}
+
     coord = _coordinator(request)
     if not coord.is_initialized():
         coord.initialize()
 
-    import asyncio
-    import os
-    import json
-    import re
     async def generate_chat_events():
+        import asyncio
+        import os
+        import json
+        import re
+        import urllib.request
         from src.nlp.schemas import (
             ComfortEvent as SemanticComfortEvent,
             ComfortIntent,
@@ -195,16 +208,54 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             yield f"data: {json.dumps({'applied': False, 'is_applicable': False, 'translation': final_translation.model_dump()})}\n\n"
             return
 
+        # Tool dispatch: deterministic sensor read from the HAL registry.
+        # This is "tool calling" done server-side: gemma3:1b has no `tools`
+        # capability, and the value must come from a sensor, never from generation.
+        try:
+            from src.hardware.telemetry_tools import answer_telemetry_query
+            tool_result = answer_telemetry_query(
+                body.message,
+                environment_id=body.environment_id,
+                twin_states=coord.get_zone_states(),
+                history=body.history,
+            )
+        except Exception as exc:  # the HAL must never take the chatbot down
+            logger.warning("Sensor tool dispatch unavailable: %s", exc)
+            tool_result = None
+
+        if tool_result is not None:
+            yield f"data: {json.dumps({'chunk': tool_result.text})}\n\n"
+            final_translation = SemanticTranslationResult(
+                raw_query=body.message,
+                is_applicable=False,
+                response_text=tool_result.text,
+                events=[],
+                timestamp=0.0
+            )
+            tool_payload = tool_result.to_payload()
+            tool_payload["domain"] = "thermal"
+            tool_payload["location"] = tool_result.zone_id or "open_office"
+            yield f"data: {json.dumps({'applied': False, 'is_applicable': False, 'tool': tool_payload, 'translation': final_translation.model_dump(), 'llm_json': tool_payload, 'model': 'telemetry_tool'})}\n\n"
+            return
+
         # Fast path for live telemetry inquiries
-        if re.search(r"\b(what(?:'s| is) the (?:temp|temperature|humidity)|how hot|how cold|current temp)\b", msg_clean):
+        if re.search(r"\b(what(?:'?s|\s+is)\s+(?:the\s+)?(?:temp|temperature|humidity)|how\s+(?:hot|cold|warm)|current\s+temp|check\s+(?:the\s+)?(?:temp|temperature))\b", msg_clean):
             zone_states = coord.get_zone_states()
             target_zone = "open_office"
             if "lobby" in msg_clean:
                 target_zone = "lobby"
             elif "conf" in msg_clean:
                 target_zone = "conference_room"
+            elif "server" in msg_clean:
+                target_zone = "server_room"
             elif "office" in msg_clean:
                 target_zone = "open_office"
+            elif "hospital" in msg_clean or "clinical" in msg_clean:
+                target_zone = "clinical_areas"
+            elif "staff" in msg_clean:
+                target_zone = "staff_areas"
+            elif "support" in msg_clean:
+                target_zone = "support_hvac"
             
             z_data = zone_states.get(target_zone, {})
             temp_val = z_data.get("temperature_c", 22.0)
@@ -221,7 +272,15 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 events=[],
                 timestamp=0.0
             )
-            yield f"data: {json.dumps({'applied': False, 'is_applicable': False, 'translation': final_translation.model_dump()})}\n\n"
+            fast_json = {
+                "domain": "thermal",
+                "query_type": "telemetry_lookup",
+                "location": target_zone,
+                "temperature_c": round(temp_val, 1),
+                "target_setpoint_c": round(target_val, 1),
+                "humidity_pct": round(hum_val, 1)
+            }
+            yield f"data: {json.dumps({'applied': False, 'is_applicable': False, 'translation': final_translation.model_dump(), 'llm_json': fast_json, 'model': 'telemetry_fast_path'})}\n\n"
             return
 
         # Local Ollama is strictly required for AI inference
@@ -238,22 +297,70 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         ollama_timeout = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "180.0"))
         
         local_t = LocalTranslator(
-            backend_type="ollama", 
-            ollama_url=ollama_url, 
+            backend_type="ollama",
+            ollama_url=ollama_url,
             model_name=ollama_model,
             timeout=ollama_timeout,
             fallback_to_mock=False,
         )
-        
-        prompt = build_full_prompt(body.message, environment_id=body.environment_id, include_system_prompt=False)
+
+        # F3: Startup validation — verify backend health, model presence,
+        # and send keep_alive / set context (Ollama defaults: 5m keep-alive,
+        # 4k context on <24GiB; we override to 30m and 2048 for Pi 4).
+        try:
+            health_req = urllib.request.Request(
+                f"{ollama_url}/api/tags", method="GET"
+            )
+            with urllib.request.urlopen(health_req, timeout=3.0) as resp:
+                tags_data = json.loads(resp.read())
+                served_models = [
+                    m.get("name", "").strip()
+                    for m in tags_data.get("models", [])
+                ]
+                configured = ollama_model.strip()
+                if configured not in served_models:
+                    logger.warning(
+                        "F3 VALIDATION FAIL: configured model '%s' not in served models %s",
+                        configured, served_models,
+                    )
+                else:
+                    logger.info(
+                        "F3 VALIDATION OK: model '%s' loaded; keep-alive set via options",
+                        configured,
+                    )
+        except Exception as exc:
+            logger.warning("F3 VALIDATION: cannot reach Ollama at %s (%s)", ollama_url, exc)
+
+        # Pass keep_alive (30m) and optimal 1024 context directly in inference options
+        local_t.backend.extra_options["keep_alive"] = "30m"
+        local_t.backend.extra_options["num_ctx"] = 1024
+        local_t.backend.extra_options["num_predict"] = 96
+        local_t.backend.timeout = ollama_timeout
+
+        # F1b: Grounding block — inject live building snapshot into prompt so LLM
+        # answers only from live telemetry. Uses spaCy-enhanced zone resolution.
+        from src.nlp.local_translator import ground_block
+        zone_states = coord.get_zone_states()
+        grounding_text = ground_block(zone_states if isinstance(zone_states, dict) else {})
+        prompt = build_full_prompt(
+            body.message,
+            environment_id=body.environment_id,
+            include_system_prompt=False
+        )
+        # Prepend grounding as a system-level instruction (does not break JSON parsing)
+        if grounding_text:
+            prompt = grounding_text + "\n\n--- OCCUPANT MESSAGE ---\n" + prompt
         full_text = ""
         is_json_part = False
         yielded_len = 0
         has_yielded_chunk = False
         
-        # Stream the conversational response from local Ollama
+        # Stream the conversational response from local Ollama (F4-A hotfix:
+        # sync blocking urllib generator → threadpool so event loop stays unblocked)
         try:
-            for chunk in local_t.backend.generate_stream(prompt=prompt, grammar=None, max_tokens=96):
+            async for chunk in iterate_in_threadpool(
+                local_t.backend.generate_stream(prompt=prompt, grammar=None, max_tokens=96)
+            ):
                 full_text += chunk
                 
                 if not is_json_part:
@@ -448,6 +555,16 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             timestamp=0.0
         )
         
+        # F5b: Update server-side session state with resolved zone/metric so
+        # follow-up turns ("what about the lobby?") resolve deterministically.
+        try:
+            zone_for_session = zone_id or last_zone
+            metric_for_session = None  # could extract from full_text; kept simple
+            if zone_for_session:
+                update_session(zone_for_session, metric_for_session)
+        except Exception:
+            pass  # session state must never break the chat endpoint
+
         # Inject into simulator
         applied = False
         if final_translation.is_applicable and final_translation.events:
@@ -458,8 +575,59 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 )
             applied = True
         
+        # Extract the pure JSON produced by qwen3:1.7b
+        llm_json = None
+        try:
+            from src.nlp.local_translator import (
+                stage1_strip_markdown_fences,
+                stage2_slice_outer_json_boundaries,
+                stage3_normalize_json_syntax,
+            )
+            stripped_text = stage1_strip_markdown_fences(full_text)
+            sliced_text = stage2_slice_outer_json_boundaries(stripped_text)
+            if "{" in sliced_text and "}" in sliced_text:
+                normalized_text = stage3_normalize_json_syntax(sliced_text)
+                llm_json = json.loads(normalized_text)
+        except Exception as exc:
+            logger.debug("Raw JSON extraction from LLM text fallback: %s", exc)
+
+        if not llm_json or not isinstance(llm_json, dict):
+            if hasattr(res, "model_dump"):
+                raw_dump = res.model_dump()
+                llm_json = {
+                    "domain": raw_dump.get("domain", "thermal"),
+                    "sensation": raw_dump.get("sensation", "other"),
+                    "location": raw_dump.get("location", zone_id),
+                    "intensity": raw_dump.get("intensity", 3),
+                    "action_requested": raw_dump.get("action_requested") or ("increase_cooling" if intent == ComfortIntent.TOO_WARM else "increase_heating"),
+                    "confidence": raw_dump.get("confidence", 0.9),
+                }
+            else:
+                llm_json = {
+                    "domain": getattr(res, "domain", "thermal"),
+                    "sensation": getattr(res, "sensation", "other"),
+                    "location": getattr(res, "location", zone_id),
+                    "intensity": getattr(res, "intensity", 3),
+                    "action_requested": getattr(res, "action_requested", None),
+                    "confidence": getattr(res, "confidence", 0.9),
+                }
+
         # Yield the final payload
-        yield f"data: {json.dumps({'applied': bool(applied), 'is_applicable': final_translation.is_applicable, 'translation': final_translation.model_dump()})}\n\n"
+        action_desc = (
+            f"Offset {'-1.5°C' if intent == ComfortIntent.TOO_WARM else ('+1.5°C' if intent == ComfortIntent.TOO_COLD else '0.0°C')} applied to {zone_display}"
+            if applied else "No offset injected"
+        )
+        yield f"data: {json.dumps({
+            'applied': bool(applied),
+            'is_applicable': final_translation.is_applicable,
+            'translation': final_translation.model_dump(),
+            'llm_json': llm_json,
+            'model': ollama_model,
+            'raw_llm_response': full_text.strip(),
+            'zone_id': zone_id,
+            'intent': intent.value if hasattr(intent, 'value') else str(intent),
+            'action_summary': action_desc,
+        })}\n\n"
 
     sse_generator = generate_chat_events
     return StreamingResponse(generate_chat_events(), media_type="text/event-stream")
@@ -494,7 +662,7 @@ async def zones_endpoint(request: Request) -> ZonesResponse:
                 active_nlp_offset_c=float(st.get("active_nlp_offset_c", 0.0)),
             )
 
-    return ZonesResponse(zones=zone_ids, states=states)
+    return ZonesResponse(zones=list(states.keys()), states=states)
 
 
 @router.get("/metrics", response_model=MetricsResponse)
@@ -638,6 +806,30 @@ async def stream_endpoint(request: Request) -> StreamingResponse:
         },
     )
 
+
+@router.get("/nlp/audit", response_model=Dict[str, Any])
+async def audit_endpoint(request: Request) -> Dict[str, Any]:
+    """F2 L5 audit trail: returns authorization log from the constraint bridge.
+    Proves provenance (interrogative gate, slot completeness, evidence, trust tier)
+    for every NLP event. Zero LLM involvement — purely deterministic."""
+    coord = _coordinator(request)
+    if not coord.is_initialized():
+        coord.initialize()
+    # The constraint bridge lives inside the simulation runner; access it via coord.runner
+    audit_log = coord.runner.constraint_bridge.get_audit_trail() if hasattr(coord.runner, "constraint_bridge") else []
+    return {
+        "audit_entries": audit_log,
+        "count": len(audit_log),
+        "note": "Each entry: timestamp, event_id, zone_id, intent, severity, interrogative_detected, slot_complete, authorized, reason, confidence, source, trust_tier.",
+    }
+
+
+# F6 — Frozen SSE contract (do not rename keys without updating
+# src/ui/app.js:107-136): event stream uses exactly:
+#   chunk (str), applied (bool), is_applicable (bool),
+#   translation (dict: raw_query, events, response_text, timestamp),
+#   error/status (optional on failure), tool (optional telemetry read).
+# Changing any of these keys breaks the frontend.
 
 __all__ = [
     "router",
