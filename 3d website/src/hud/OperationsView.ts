@@ -222,6 +222,12 @@ export class OperationsView {
     const activeTag = document.activeElement?.tagName?.toLowerCase();
     if (activeTag === 'input' || activeTag === 'textarea') return;
 
+    // If connection is confirmed live, auto-dismiss any prior stale failure notices
+    const conn = this.hvacStore.getConnectionState();
+    if (conn.status === 'LIVE' && this.retryResult && !this.retryResult.success) {
+      this.retryResult = null;
+    }
+
     const currentHash = this.getRenderHash();
     if (currentHash !== this.lastRenderHash) {
       this.render();
@@ -630,10 +636,16 @@ export class OperationsView {
         message: result.message,
         success: result.success
       };
+      if (result.success) {
+        setTimeout(() => {
+          this.retryResult = null;
+          this.render();
+        }, 4000);
+      }
     } catch {
       this.retryResult = {
         show: true,
-        message: 'Connection attempt failed. BACnet IP Gateway (192.168.12.1:47808) unreachable.',
+        message: 'Connection attempt failed. Raspberry Pi MQTT Gateway (10.100.177.51:1883) unreachable.',
         success: false
       };
     } finally {

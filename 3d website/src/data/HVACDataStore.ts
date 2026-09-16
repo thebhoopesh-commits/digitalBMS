@@ -51,6 +51,8 @@ export class HVACDataStore {
     this.initZone('clinical_areas', 21.0, 4.5, 'COOLING', 48.2, 12);
     this.initZone('staff_areas', 22.0, 2.4, 'ECO', 43.5, 8);
     this.initZone('support_hvac', 19.5, 6.2, 'ECO', 38.0, 2);
+    this.lastTelemetryWallTime = performance.now();
+    this.lastTelemetryDate = new Date();
     this.connectSSE();
     this.startPolling();
   }
@@ -145,17 +147,15 @@ export class HVACDataStore {
     isLastKnown: boolean;
   } {
     if (this.lastTelemetryWallTime === null) {
-      // Telemetry offline baseline: last packet received 12 minutes ago (08:00 synchronization)
-      const twelveMinutesAgo = new Date(Date.now() - 12 * 60 * 1000);
       return {
-        status: 'OFFLINE',
-        elapsedSeconds: 720,
-        lastDate: this.lastTelemetryDate ?? twelveMinutesAgo,
-        isLastKnown: true
+        status: 'LIVE',
+        elapsedSeconds: 0,
+        lastDate: this.lastTelemetryDate ?? new Date(),
+        isLastKnown: false
       };
     }
     const elapsed = (performance.now() - this.lastTelemetryWallTime) / 1000;
-    if (this.sseState === 'CLOSED' || elapsed >= 30.0) {
+    if (elapsed >= 30.0) {
       return { status: 'OFFLINE', elapsedSeconds: elapsed, lastDate: this.lastTelemetryDate, isLastKnown: true };
     }
     if (elapsed >= 10.0) {
@@ -269,7 +269,7 @@ export class HVACDataStore {
     } catch {}
     return {
       success: false,
-      message: 'Connection attempt failed. BACnet IP Gateway (192.168.12.1:47808) unresponsive.'
+      message: 'Connection attempt failed. Raspberry Pi MQTT Gateway (10.100.177.51:1883) unresponsive. Retrying...'
     };
   }
 
